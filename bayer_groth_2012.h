@@ -28,20 +28,21 @@ struct Ciphertext {
 };
 
 struct ShuffleProof {
-    std::vector<std::vector<mpz_class>> A;  // Commitment matrix (g side)
-    std::vector<std::vector<mpz_class>> B;  // Commitment matrix (h side)
-    std::vector<mpz_class> z1;  // Response for new randomness
-    std::vector<mpz_class> z2;  // Response for old randomness  
-    std::vector<mpz_class> z3;  // Response for permutation column sums
-    std::vector<mpz_class> z4;  // Response for permutation row sums
-    std::vector<mpz_class> z5;  // Response for permutation randomness
-    std::vector<mpz_class> z6;  // Response for permutation randomness
-    std::vector<mpz_class> z7;  // Response for new randomness
-    std::vector<mpz_class> z8;  // Response for new randomness
-    std::vector<mpz_class> z9;  // Response for message mask
-    std::vector<mpz_class> z10; // Response for permutation randomness
-    mpz_class t;  // Challenge-dependent value for A
-    mpz_class u;  // Challenge-dependent value for B
+    std::vector<std::vector<mpz_class>> A;  // Commitment matrix g^S
+    std::vector<std::vector<mpz_class>> B;  // Commitment matrix h^S
+    std::vector<mpz_class> z1;  // z1[i] = r'_i + c * rho_{pi(i)}
+    std::vector<mpz_class> z2;  // z2[i] = rho_i + c * (row/col sums)
+    std::vector<mpz_class> z3;  // z3[i] = sum_j S[i][j] * V[i][j]
+    std::vector<mpz_class> z4;  // z4[i] = sum_j S[j][i] * V[j][i]
+    std::vector<mpz_class> z5;  // z5[i] = random for permutation proof
+    std::vector<mpz_class> z6;  // z6[i] = random for permutation proof
+    std::vector<mpz_class> z7;  // z7[i] = random for commitment proof
+    std::vector<mpz_class> z8;  // z8[i] = random for commitment proof
+    std::vector<mpz_class> z9;  // z9 = sum of random values
+    std::vector<mpz_class> z10; // z10 = additional random value
+    mpz_class t;  // t = product of a'_i / a_i ^ c
+    mpz_class u;  // u = product of b'_i / b_i ^ c
+    mpz_class d;  // d = commitment to permutation matrix
 };
 
 class BayerGroth2012 {
@@ -91,6 +92,9 @@ private:
     std::mt19937_64* randomGen;
     bool ownsRandomGen;
     PublicKey currentPk;
+
+    // Store the S matrix for response computation
+    std::vector<std::vector<mpz_class>> S_matrix;
 
     mpz_class getRandomExponent();
     

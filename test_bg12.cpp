@@ -10,7 +10,7 @@ using namespace BG12;
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "  Bayer-Groth 2012 Shuffle Protocol" << std::endl;
-    std::cout << "  Test" << std::endl;
+    std::cout << "  Full Test" << std::endl;
     std::cout << "========================================" << std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -25,22 +25,38 @@ int main() {
     std::cout << "    |q| = " << mpz_sizeinbase(key.pk.q.get_mpz_t(), 2) << " bits" << std::endl;
     std::cout << "    g^q = " << bg12.modExp(key.pk.g, key.pk.q, key.pk.p) << " (should be 1)" << std::endl;
 
-    std::cout << "\n[2] Encryption" << std::endl;
-    Ciphertext ct = bg12.encrypt(key.pk, mpz_class(42));
-    std::cout << "    Encrypted message: 42" << std::endl;
+    std::cout << "\n[2] Encrypt multiple messages" << std::endl;
+    std::vector<Ciphertext> input;
+    std::vector<mpz_class> messages = {mpz_class(1), mpz_class(2), mpz_class(3), mpz_class(42), mpz_class(100)};
+    for (const auto& msg : messages) {
+        Ciphertext ct = bg12.encrypt(key.pk, msg);
+        input.push_back(ct);
+    }
+    std::cout << "    Encrypted " << input.size() << " messages" << std::endl;
     
-    size_t ctSize = estimateCiphertextSize(ct);
-    std::cout << "    Ciphertext size: " << ctSize << " bytes" << std::endl;
+    size_t ctSize = estimateCiphertextSize(input[0]);
+    std::cout << "    Ciphertext size: " << ctSize << " bytes each" << std::endl;
 
-    std::cout << "\n[3] Shuffle with Proof" << std::endl;
-    std::vector<Ciphertext> input(1, ct);
-    std::vector<int> perm = {0};
-    std::vector<mpz_class> rand(1);
-    rand[0] = BayerGroth2012::generateRandom(key.pk.q, rng);
+    std::cout << "\n[3] Generate permutation" << std::endl;
+    std::vector<int> perm = BayerGroth2012::generatePermutation(input.size(), rng);
+    std::cout << "    Permutation: ";
+    for (size_t i = 0; i < perm.size(); ++i) {
+        std::cout << perm[i] << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "\n[4] Generate randomness for each element" << std::endl;
+    std::vector<mpz_class> randomness(input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+        randomness[i] = BayerGroth2012::generateRandom(key.pk.q, rng);
+    }
+    std::cout << "    Generated " << randomness.size() << " random values" << std::endl;
+
+    std::cout << "\n[5] Shuffle with Proof" << std::endl;
     ShuffleProof proof;
     
     auto shuffleStart = std::chrono::high_resolution_clock::now();
-    std::vector<Ciphertext> output = bg12.shuffle(key.pk, input, rand, perm, proof);
+    std::vector<Ciphertext> output = bg12.shuffle(key.pk, input, randomness, perm, proof);
     auto shuffleEnd = std::chrono::high_resolution_clock::now();
     auto shuffleTime = std::chrono::duration_cast<std::chrono::microseconds>(shuffleEnd - shuffleStart);
     
@@ -49,7 +65,7 @@ int main() {
     std::cout << "    Proof size: " << proofSize << " bytes" << std::endl;
     std::cout << "    Time: " << shuffleTime.count() << " us" << std::endl;
 
-    std::cout << "\n[4] Verification" << std::endl;
+    std::cout << "\n[6] Verify shuffle" << std::endl;
     auto verifyStart = std::chrono::high_resolution_clock::now();
     bool valid = bg12.verify(key.pk, input, output, proof);
     auto verifyEnd = std::chrono::high_resolution_clock::now();
@@ -57,6 +73,13 @@ int main() {
     
     std::cout << "    Result: " << (valid ? "VALID" : "INVALID") << std::endl;
     std::cout << "    Time: " << verifyTime.count() << " us" << std::endl;
+
+    if (valid) {
+        std::cout << "\n[7] Verify decryption (optional check)" << std::endl;
+        std::cout << "    Note: Full decryption would require secret key" << std::endl;
+        std::cout << "    Input ciphertexts: " << input.size() << std::endl;
+        std::cout << "    Output ciphertexts: " << output.size() << std::endl;
+    }
 
     auto end = std::chrono::high_resolution_clock::now();
     auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -67,8 +90,15 @@ int main() {
 
     std::cout << "\n[Performance Summary]" << std::endl;
     std::cout << "  Total time:      " << total.count() << " ms" << std::endl;
-    std::cout << "  Ciphertext:      " << ctSize << " bytes" << std::endl;
+    std::cout << "  Ciphertexts:     " << input.size() << " x " << ctSize << " bytes" << std::endl;
     std::cout << "  Proof:           " << proofSize << " bytes" << std::endl;
+
+    std::cout << "\n[BG12 Protocol Features]" << std::endl;
+    std::cout << "  - ElGamal encryption" << std::endl;
+    std::cout << "  - Commitment matrix A = g^S, B = h^S" << std::endl;
+    std::cout << "  - Challenge-response proof (z1-z10)" << std::endl;
+    std::cout << "  - Product-form verification" << std::endl;
+    std::cout << "  - Zero-knowledge shuffle proof" << std::endl;
 
     return valid ? 0 : 1;
 }
