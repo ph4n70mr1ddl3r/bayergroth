@@ -275,10 +275,14 @@ void BayerGrothFull::computeResponses(
 
     mpz_class sum_alpha_row = ZERO;
     mpz_class sum_beta_row = ZERO;
+    mpz_class sum_alpha_col = ZERO;
+    mpz_class sum_beta_col = ZERO;
 
     for (size_t i = 0; i < n; ++i) {
         sum_alpha_row = modAdd(sum_alpha_row, alpha_row[i], pk.q);
         sum_beta_row = modAdd(sum_beta_row, beta_row[i], pk.q);
+        sum_alpha_col = modAdd(sum_alpha_col, alpha_col[i], pk.q);
+        sum_beta_col = modAdd(sum_beta_col, beta_col[i], pk.q);
     }
 
     proof.z1.resize(n);
@@ -318,6 +322,12 @@ void BayerGrothFull::computeResponses(
 
     proof.t = prod_t;
     proof.u = prod_u;
+
+    mpz_class sum_alpha_all = modAdd(sum_alpha_row, sum_alpha_col, pk.q);
+    mpz_class sum_beta_all = modAdd(sum_beta_row, sum_beta_col, pk.q);
+
+    proof.z9 = modSub(sum_alpha_all, sum_all_s, pk.q);
+    proof.z10 = modSub(sum_beta_all, sum_all_s, pk.q);
 }
 
 std::vector<Ciphertext> BayerGrothFull::shuffle(
@@ -372,34 +382,6 @@ std::vector<Ciphertext> BayerGrothFull::shuffle(
 
     proof.t = prod_t;
     proof.u = prod_u;
-
-    mpz_class prod_D_diag = ONE;
-    mpz_class prod_A_diag = ONE;
-    mpz_class prod_B_diag = ONE;
-    for (size_t i = 0; i < n; ++i) {
-        prod_D_diag = modMul(prod_D_diag, proof.D[i][i], pk.p);
-        prod_A_diag = modMul(prod_A_diag, proof.A[i][i], pk.p);
-        prod_B_diag = modMul(prod_B_diag, proof.B[i][i], pk.p);
-    }
-
-    mpz_class target_g = modDiv(prod_D_diag, prod_A_diag, pk.p);
-    mpz_class target_h = modDiv(prod_D_diag, prod_B_diag, pk.p);
-
-    mpz_class log_g = ZERO;
-    mpz_class temp_g = modExp(pk.g, log_g, pk.p);
-    while (temp_g != target_g && log_g < pk.q) {
-        log_g = modAdd(log_g, ONE, pk.q);
-        temp_g = modExp(pk.g, log_g, pk.p);
-    }
-    proof.z9 = log_g;
-
-    mpz_class log_h = ZERO;
-    mpz_class temp_h = modExp(pk.h, log_h, pk.p);
-    while (temp_h != target_h && log_h < pk.q) {
-        log_h = modAdd(log_h, ONE, pk.q);
-        temp_h = modExp(pk.h, log_h, pk.p);
-    }
-    proof.z10 = log_h;
 
     return output;
 }

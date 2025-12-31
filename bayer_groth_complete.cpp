@@ -300,9 +300,14 @@ void BayerGrothComplete::computeResponses(
 
     mpz_class sum_alpha_row = ZERO;
     mpz_class sum_beta_row = ZERO;
+    mpz_class sum_alpha_col = ZERO;
+    mpz_class sum_beta_col = ZERO;
+
     for (size_t i = 0; i < n; ++i) {
         sum_alpha_row = modAdd(sum_alpha_row, alpha_row[i], pk.q);
         sum_beta_row = modAdd(sum_beta_row, beta_row[i], pk.q);
+        sum_alpha_col = modAdd(sum_alpha_col, alpha_col[i], pk.q);
+        sum_beta_col = modAdd(sum_beta_col, beta_col[i], pk.q);
     }
 
     proof.z1.resize(n);
@@ -342,13 +347,11 @@ void BayerGrothComplete::computeResponses(
     }
     proof.d_perm = prod_D_diag;
 
-    mpz_class log_prod_A_row_corr = discreteLog(pk.g, prod_A_row_corr, pk.p);
-    mpz_class log_prod_B_row_corr = discreteLog(pk.h, prod_B_row_corr, pk.p);
-    mpz_class log_prod_D_diag = discreteLog(pk.g, prod_D_diag, pk.p);
-    mpz_class log_prod_D_diag_h = discreteLog(pk.h, prod_D_diag, pk.p);
+    mpz_class sum_alpha_all = modAdd(sum_alpha_row, sum_alpha_col, pk.q);
+    mpz_class sum_beta_all = modAdd(sum_beta_row, sum_beta_col, pk.q);
 
-    mpz_class z9_target = modSub(log_prod_D_diag, log_prod_A_row_corr, pk.q);
-    mpz_class z10_target = modSub(log_prod_D_diag_h, log_prod_B_row_corr, pk.q);
+    mpz_class z9_target = modSub(sum_alpha_all, modMul(one_plus_c, sum_all_s, pk.q), pk.q);
+    mpz_class z10_target = modSub(sum_beta_all, modMul(one_plus_c, sum_all_s, pk.q), pk.q);
 
     proof.z9 = z9_target;
     proof.z10 = z10_target;
