@@ -145,13 +145,9 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 
         mpz_class new_a = ct.a * g_r % player2.keyPair.pk.p;
         mpz_class new_b = ct.b * h_r % player2.keyPair.pk.p;
-        mpz_class new_c = ct.c * g_r % player2.keyPair.pk.p;
-        mpz_class new_d = ct.d * h_r % player2.keyPair.pk.p;
 
         ct.a = new_a;
         ct.b = new_b;
-        ct.c = new_c;
-        ct.d = new_d;
     }
 
     std::cout << "Shuffling deck..." << std::endl;

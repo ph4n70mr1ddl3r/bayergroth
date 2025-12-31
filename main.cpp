@@ -94,8 +94,6 @@ int main() {
         mpz_class h_r = shuffle.modExp(bobKey.pk.h, r, bobKey.pk.p);
         deck[i].a = shuffle.modMul(deck[i].a, g_r, bobKey.pk.p);
         deck[i].b = shuffle.modMul(deck[i].b, h_r, bobKey.pk.p);
-        deck[i].c = shuffle.modMul(deck[i].c, g_r, bobKey.pk.p);
-        deck[i].d = shuffle.modMul(deck[i].d, h_r, bobKey.pk.p);
     }
     auto reencryptEnd = std::chrono::high_resolution_clock::now();
     auto reencryptDuration = std::chrono::duration_cast<std::chrono::microseconds>(reencryptEnd - reencryptStart);

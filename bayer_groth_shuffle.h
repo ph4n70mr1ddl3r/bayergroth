@@ -6,6 +6,7 @@
 #include <random>
 #include <gmpxx.h>
 #include <openssl/rand.h>
+#include <array>
 
 namespace BayerGroth {
 
@@ -24,8 +25,6 @@ struct KeyPair {
 struct Ciphertext {
     mpz_class a;
     mpz_class b;
-    mpz_class c;
-    mpz_class d;
 };
 
 struct ShuffleProof {
@@ -50,10 +49,10 @@ struct ShuffleProof {
 
 class BayerGrothShuffle {
 public:
-    BayerGrothShuffle(int securityParam = 256);
+    explicit BayerGrothShuffle(int securityParam = 256);
     ~BayerGrothShuffle();
 
-    void setRandomGenerator(std::mt19937_64& rng);
+    void setRandomGenerator(std::mt19937_64 rng);
 
     KeyPair generateKeyPair();
     Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
@@ -72,14 +71,6 @@ public:
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof);
-
-    ShuffleProof prove(
-        const PublicKey& pk,
-        const std::vector<Ciphertext>& input,
-        const std::vector<Ciphertext>& output,
-        const std::vector<mpz_class>& inputRand,
-        const std::vector<mpz_class>& outputRand,
-        const std::vector<int>& permutation);
 
     mpz_class computeChallenge(
         const PublicKey& pk,
@@ -103,9 +94,8 @@ public:
 private:
     int securityParam;
     PublicKey currentPk;
+    std::mt19937_64 rng;
     std::vector<std::vector<mpz_class>> S_matrix;
-    std::mt19937_64* externalRng;
-    bool useExternalRng;
 
     mpz_class getRandomExponent();
     
@@ -128,6 +118,10 @@ private:
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof,
         const mpz_class& challenge);
+
+    static void hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value);
+    static bool isValidPublicKey(const PublicKey& pk);
+    static bool isSafePrime(const mpz_class& p, const mpz_class& q);
 };
 
 size_t estimateProofSize(const ShuffleProof& proof);
