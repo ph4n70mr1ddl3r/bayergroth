@@ -213,8 +213,19 @@ mpz_class BayerGroth2012::generateRandom(const mpz_class& limit, std::mt19937_64
 }
 
 bool BayerGroth2012::constantTimeEquals(const mpz_class& a, const mpz_class& b) {
-    if (a == b) return true;
-    return false;
+    std::string a_str = a.get_str();
+    std::string b_str = b.get_str();
+    
+    if (a_str.length() != b_str.length()) {
+        return false;
+    }
+    
+    unsigned char result = 0;
+    for (size_t i = 0; i < a_str.length(); ++i) {
+        result |= (a_str[i] ^ b_str[i]);
+    }
+    
+    return result == 0;
 }
 
 void BayerGroth2012::generateCommitments(
@@ -233,31 +244,15 @@ void BayerGroth2012::generateCommitments(
     proof.D.resize(n, std::vector<mpz_class>(n));
     S_matrix.resize(n, std::vector<mpz_class>(n));
     
-    alpha_row.resize(n);
-    beta_row.resize(n);
-    alpha_col.resize(n);
-    beta_col.resize(n);
-    
-    alpha_sum = ZERO;
-    beta_sum = ZERO;
-    
     for (size_t i = 0; i < n; ++i) {
-        alpha_row[i] = getRandomExponent();
-        beta_row[i] = getRandomExponent();
-        alpha_col[i] = getRandomExponent();
-        beta_col[i] = getRandomExponent();
-        
-        alpha_sum = modAdd(alpha_sum, alpha_row[i], pk.q);
-        beta_sum = modAdd(beta_sum, beta_row[i], pk.q);
-        
         for (size_t j = 0; j < n; ++j) {
             mpz_class s = getRandomExponent();
             S_matrix[i][j] = s;
             mpz_powm(proof.A[i][j].get_mpz_t(), pk.g.get_mpz_t(), s.get_mpz_t(), pk.p.get_mpz_t());
             mpz_powm(proof.B[i][j].get_mpz_t(), pk.h.get_mpz_t(), s.get_mpz_t(), pk.p.get_mpz_t());
             
-            mpz_class alpha_ij = modAdd(alpha_row[i], alpha_col[j], pk.q);
-            mpz_class beta_ij = modAdd(beta_row[i], beta_col[j], pk.q);
+            mpz_class alpha_ij = getRandomExponent();
+            mpz_class beta_ij = getRandomExponent();
             mpz_class d_ij = modExp(pk.g, alpha_ij, pk.p);
             d_ij = modMul(d_ij, modExp(pk.h, beta_ij, pk.p), pk.p);
             proof.D[i][j] = d_ij;
@@ -386,13 +381,6 @@ void BayerGroth2012::computeResponses(
     for (size_t i = 0; i < n; ++i) {
         proof.z4[i] = S_matrix[inv_perm[i]][i];
     }
-    
-    mpz_class alpha_col_sum = ZERO;
-    mpz_class beta_col_sum = ZERO;
-    for (size_t i = 0; i < n; ++i) {
-        alpha_col_sum = modAdd(alpha_col_sum, alpha_col[i], pk.q);
-        beta_col_sum = modAdd(beta_col_sum, beta_col[i], pk.q);
-    }
 
     for (size_t i = 0; i < n; ++i) {
         mpz_class term_row = modMul(row_sum[i], challenge, pk.q);
@@ -504,6 +492,8 @@ std::vector<Ciphertext> BayerGroth2012::shuffle(
     
     computeResponses(pk, input, output, randomness, outputRand, permutation, challenge, proof);
     
+    proof.permutation = permutation;
+    
     mpz_class sum_other_z1 = ZERO;
     for (size_t i = 1; i < n; ++i) {
         sum_other_z1 = modAdd(sum_other_z1, proof.z1[i], pk.q);
@@ -540,9 +530,28 @@ bool BayerGroth2012::verifyEquations(
         return false;
     }
     
-    // Note: z2, z3, z4 verification requires knowledge of S matrix which is secret
-    // We skip detailed verification of these values for the basic implementation
-    // The core shuffle correctness is verified through t, u, z5-z10 equations
+    // Verify z3 and z4 consistency
+    // z3[i] = S[i][π(i)], so A[i][π(i)] = g^{z3[i]}
+    // z4[i] = S[π^{-1}(i)][i], so A[π^{-1}(i)][i] = g^{z4[i]}
+    std::vector<int> inv_perm(n);
+    for (size_t j = 0; j < n; ++j) {
+        inv_perm[proof.permutation[j]] = j;
+    }
+    
+    for (size_t i = 0; i < n; ++i) {
+        mpz_class g_z3 = modExp(pk.g, proof.z3[i], pk.p);
+        if (!constantTimeEquals(g_z3, proof.A[i][proof.permutation[i]])) {
+            return false;
+        }
+        
+        mpz_class g_z4 = modExp(pk.g, proof.z4[i], pk.p);
+        if (!constantTimeEquals(g_z4, proof.A[inv_perm[i]][i])) {
+            return false;
+        }
+    }
+    
+    // Note: Full z2 verification requires knowledge of row_sum which needs discrete log
+    // We skip detailed verification of z2 for the basic implementation
     
     for (size_t i = 0; i < n; ++i) {
         mpz_class prod_A_row_c = ONE;

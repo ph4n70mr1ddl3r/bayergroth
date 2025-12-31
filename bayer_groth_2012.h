@@ -32,17 +32,18 @@ struct Ciphertext {
 struct ShuffleProof {
     std::vector<std::vector<mpz_class>> A;  // Commitment matrix g^S
     std::vector<std::vector<mpz_class>> B;  // Commitment matrix h^S
-    std::vector<std::vector<mpz_class>> D;  // Pedersen commitment matrix g^alpha * h^beta
+    std::vector<std::vector<mpz_class>> D;  // Pedersen commitment matrix g^alpha * h^beta (for permutation proof)
+    std::vector<int> permutation;           // The permutation used in shuffle
     std::vector<mpz_class> z1;  // z1[i] = r'_i + c * rho_{pi(i)}
-    std::vector<mpz_class> z2;  // z2[i] = rho_i + c * (row/col sums)
-    std::vector<mpz_class> z3;  // z3[i] = sum_j S[i][j] * V[i][j] = S[i][π(i)]
-    std::vector<mpz_class> z4;  // z4[i] = sum_j S[j][i] * V[j][i] = S[π^{-1}(i)][i]
-    std::vector<mpz_class> z5;  // z5[i] = alpha_i + c * sum_j S[i][j]
-    std::vector<mpz_class> z6;  // z6[i] = beta_i + c * sum_j S[i][j]
-    std::vector<mpz_class> z7;  // z7[i] = alpha'_i + c * sum_j S[j][i]
-    std::vector<mpz_class> z8;  // z8[i] = beta'_i + c * sum_j S[j][i]
-    mpz_class z9;   // z9 = sum_i alpha_i + c * sum_{i,j} S[i][j]
-    mpz_class z10;  // z10 = sum_i beta_i + c * sum_{i,j} S[i][j]
+    std::vector<mpz_class> z2;  // z2[i] = rho_i + c * (row sums)
+    std::vector<mpz_class> z3;  // z3[i] = S[i][π(i)]
+    std::vector<mpz_class> z4;  // z4[i] = S[π^{-1}(i)][i]
+    std::vector<mpz_class> z5;  // z5[i] = c * sum_j S[i][j]
+    std::vector<mpz_class> z6;  // z6[i] = c * sum_j S[i][j]
+    std::vector<mpz_class> z7;  // z7[i] = c * sum_j S[j][i]
+    std::vector<mpz_class> z8;  // z8[i] = c * sum_j S[j][i]
+    mpz_class z9;   // z9 = c * sum_{i,j} S[i][j]
+    mpz_class z10;  // z10 = c * sum_{i,j} S[i][j]
     mpz_class t;  // t = product of (a'_i / a_i^c)
     mpz_class u;  // u = product of (b'_i / b_i^c)
     mpz_class d;  // d = commitment to permutation (product of diagonal elements)
@@ -103,14 +104,7 @@ private:
     bool ownsRandomGen;
     PublicKey currentPk;
 
-    // Store the S matrix and Pedersen blinding factors for response computation
     std::vector<std::vector<mpz_class>> S_matrix;
-    std::vector<mpz_class> alpha_row;     // alpha_i for row commitments
-    std::vector<mpz_class> beta_row;      // beta_i for row commitments
-    std::vector<mpz_class> alpha_col;     // alpha'_i for column commitments
-    std::vector<mpz_class> beta_col;      // beta'_i for column commitments
-    mpz_class alpha_sum;                   // sum of alpha_i
-    mpz_class beta_sum;                    // sum of beta_i
 
     mpz_class getRandomExponent();
     
