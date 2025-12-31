@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <openssl/sha.h>
+#include <cstring>
 
 namespace BG12 {
 
@@ -140,6 +142,16 @@ Ciphertext BayerGroth2012::reEncrypt(const PublicKey& pk, const Ciphertext& ct, 
     return result;
 }
 
+mpz_class BayerGroth2012::decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) {
+    // ElGamal decryption: m = b / a^sk mod p
+    mpz_class a_sk;
+    mpz_powm(a_sk.get_mpz_t(), ct.a.get_mpz_t(), sk.get_mpz_t(), pk.p.get_mpz_t());
+    mpz_class a_sk_inv;
+    mpz_invert(a_sk_inv.get_mpz_t(), a_sk.get_mpz_t(), pk.p.get_mpz_t());
+    mpz_class message = modMul(ct.b, a_sk_inv, pk.p);
+    return message;
+}
+
 std::vector<int> BayerGroth2012::generatePermutation(size_t n, std::mt19937_64& rng) {
     std::vector<int> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
@@ -175,16 +187,42 @@ void BayerGroth2012::generateCommitments(
     
     proof.A.resize(n, std::vector<mpz_class>(n));
     proof.B.resize(n, std::vector<mpz_class>(n));
+    proof.D.resize(n, std::vector<mpz_class>(n));
     S_matrix.resize(n, std::vector<mpz_class>(n));
-
+    
+    alpha_row.resize(n);
+    beta_row.resize(n);
+    alpha_col.resize(n);
+    beta_col.resize(n);
+    
+    alpha_sum = ZERO;
+    beta_sum = ZERO;
+    
     // Generate commitment matrix S where S[i][j] is random
     // A[i][j] = g^{S[i][j]}, B[i][j] = h^{S[i][j]}
+    // D[i][j] = g^{alpha_i} * h^{beta_i} (Pedersen commitment to row/column)
     for (size_t i = 0; i < n; ++i) {
+        alpha_row[i] = getRandomExponent();
+        beta_row[i] = getRandomExponent();
+        alpha_col[i] = getRandomExponent();
+        beta_col[i] = getRandomExponent();
+        
+        alpha_sum = modAdd(alpha_sum, alpha_row[i], pk.q);
+        beta_sum = modAdd(beta_sum, beta_row[i], pk.q);
+        
         for (size_t j = 0; j < n; ++j) {
             mpz_class s = getRandomExponent();
             S_matrix[i][j] = s;
             mpz_powm(proof.A[i][j].get_mpz_t(), pk.g.get_mpz_t(), s.get_mpz_t(), pk.p.get_mpz_t());
             mpz_powm(proof.B[i][j].get_mpz_t(), pk.h.get_mpz_t(), s.get_mpz_t(), pk.p.get_mpz_t());
+            
+            // Pedersen commitment for permutation proof
+            // D[i][j] = g^{alpha_i + alpha'_j} * h^{beta_i + beta'_j}
+            mpz_class alpha_ij = modAdd(alpha_row[i], alpha_col[j], pk.q);
+            mpz_class beta_ij = modAdd(beta_row[i], beta_col[j], pk.q);
+            mpz_class d_ij = modExp(pk.g, alpha_ij, pk.p);
+            d_ij = modMul(d_ij, modExp(pk.h, beta_ij, pk.p), pk.p);
+            proof.D[i][j] = d_ij;
         }
     }
 }
@@ -195,41 +233,61 @@ mpz_class BayerGroth2012::computeChallenge(
     const std::vector<Ciphertext>& output,
     const ShuffleProof& proof) {
 
-    std::string hashInput;
+    // Use SHA256 for cryptographic hash
+    unsigned char hash[SHA256_DIGEST_LENGTH];
     
-    // Hash all commitments
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    
+    // Hash all commitments A
     for (size_t i = 0; i < proof.A.size(); ++i) {
         for (size_t j = 0; j < proof.A[i].size(); ++j) {
-            hashInput += proof.A[i][j].get_str();
-        }
-    }
-    for (size_t i = 0; i < proof.B.size(); ++i) {
-        for (size_t j = 0; j < proof.B[i].size(); ++j) {
-            hashInput += proof.B[i][j].get_str();
+            std::string val = proof.A[i][j].get_str();
+            SHA256_Update(&sha256, val.c_str(), val.length());
         }
     }
     
-    // Hash all ciphertexts
+    // Hash all commitments B
+    for (size_t i = 0; i < proof.B.size(); ++i) {
+        for (size_t j = 0; j < proof.B[i].size(); ++j) {
+            std::string val = proof.B[i][j].get_str();
+            SHA256_Update(&sha256, val.c_str(), val.length());
+        }
+    }
+    
+    // Hash all Pedersen commitments D
+    for (size_t i = 0; i < proof.D.size(); ++i) {
+        for (size_t j = 0; j < proof.D[i].size(); ++j) {
+            std::string val = proof.D[i][j].get_str();
+            SHA256_Update(&sha256, val.c_str(), val.length());
+        }
+    }
+    
+    // Hash all input ciphertexts
     for (const auto& ct : input) {
-        hashInput += ct.a.get_str();
-        hashInput += ct.b.get_str();
+        std::string a_val = ct.a.get_str();
+        std::string b_val = ct.b.get_str();
+        SHA256_Update(&sha256, a_val.c_str(), a_val.length());
+        SHA256_Update(&sha256, b_val.c_str(), b_val.length());
     }
+    
+    // Hash all output ciphertexts
     for (const auto& ct : output) {
-        hashInput += ct.a.get_str();
-        hashInput += ct.b.get_str();
+        std::string a_val = ct.a.get_str();
+        std::string b_val = ct.b.get_str();
+        SHA256_Update(&sha256, a_val.c_str(), a_val.length());
+        SHA256_Update(&sha256, b_val.c_str(), b_val.length());
     }
-
-    // Simple hash function
-    mpz_class hashResult;
-    mpz_set_ui(hashResult.get_mpz_t(), 0);
-
-    for (char c : hashInput) {
-        mpz_class charVal = mpz_class((unsigned char)c);
-        hashResult = modAdd(hashResult, charVal, pk.p);
-        hashResult = modMul(hashResult, mpz_class(256), pk.p);
+    
+    SHA256_Final(hash, &sha256);
+    
+    // Convert hash to mpz_class and reduce mod q
+    mpz_class challenge = 0;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        challenge = challenge * 256 + hash[i];
     }
-
-    return hashResult % pk.q;
+    
+    return challenge % pk.q;
 }
 
 void BayerGroth2012::computeResponses(
@@ -252,60 +310,72 @@ void BayerGroth2012::computeResponses(
     proof.z6.resize(n);
     proof.z7.resize(n);
     proof.z8.resize(n);
-    proof.z9.resize(n);
-    proof.z10.resize(n);
+    proof.z9 = ZERO;
+    proof.z10 = ZERO;
 
-    // Compute sum of inputRand to determine required outputRand
-    mpz_class sum_input_rand = ZERO;
-    for (size_t i = 0; i < n; ++i) {
-        sum_input_rand = modAdd(sum_input_rand, inputRand[i], pk.q);
+    // Compute inverse permutation
+    std::vector<int> inv_perm(n);
+    for (size_t j = 0; j < n; ++j) {
+        inv_perm[permutation[j]] = j;
     }
     
-    // BG12 requires: sum(outputRand) + c * sum(inputRand) = 0 (mod q)
-    // This ensures g^{sum(z1)} = product(output_a) / product(input_a)^c
-    // We adjust the first outputRand to satisfy this constraint
-    mpz_class target_sum = modMul(challenge, sum_input_rand, pk.q);
-    mpz_class neg_target = pk.q - target_sum;
+    // BG12 Response Computation
+    // The permutation matrix V[i][j] = 1 if π(i) = j, else 0
     
-    // Compute sum of other outputRand values
-    mpz_class sum_other = ZERO;
-    for (size_t i = 1; i < n; ++i) {
-        sum_other = modAdd(sum_other, outputRand[i], pk.q);
-    }
-    
-    // z1[i] = outputRand[i] + c * inputRand[permutation[i]]
-    // For i=0: z1[0] = outputRand[0] + c * inputRand[permutation[0]]
-    // For i>0: z1[i] = outputRand[i] + c * inputRand[permutation[i]]
-    
-    // Set z1 values
+    // z1[i] = r'_i + c * rho_{π(i)}
     for (size_t i = 0; i < n; ++i) {
         mpz_class term = modMul(inputRand[permutation[i]], challenge, pk.q);
         proof.z1[i] = modAdd(outputRand[i], term, pk.q);
     }
     
-    // z3[i] = S[i][π(i)] (weighted row sum, but with V being permutation matrix)
+    // z2[i] = rho_i (simple case, can be extended for more complex proof)
+    for (size_t i = 0; i < n; ++i) {
+        proof.z2[i] = inputRand[i];
+    }
+    
+    // z3[i] = sum_j S[i][j] * V[i][j] = S[i][π(i)]
     for (size_t i = 0; i < n; ++i) {
         proof.z3[i] = S_matrix[i][permutation[i]];
     }
     
-    // z4[i] = S[π^{-1}(i)][i] (weighted column sum)
-    std::vector<int> inv_perm(n);
-    for (size_t j = 0; j < n; ++j) {
-        inv_perm[permutation[j]] = j;
-    }
+    // z4[i] = sum_j S[j][i] * V[j][i] = S[π^{-1}(i)][i]
     for (size_t i = 0; i < n; ++i) {
         proof.z4[i] = S_matrix[inv_perm[i]][i];
     }
     
-    // z5-z10: Additional random values
+    // z5[i] = alpha_i + c * sum_j S[i][j]
+    // z6[i] = beta_i + c * sum_j S[i][j]
+    mpz_class sum_row_s, sum_col_s;
     for (size_t i = 0; i < n; ++i) {
-        proof.z5[i] = getRandomExponent();
-        proof.z6[i] = getRandomExponent();
-        proof.z7[i] = getRandomExponent();
-        proof.z8[i] = getRandomExponent();
-        proof.z9[i] = getRandomExponent();
-        proof.z10[i] = getRandomExponent();
+        sum_row_s = ZERO;
+        for (size_t j = 0; j < n; ++j) {
+            sum_row_s = modAdd(sum_row_s, S_matrix[i][j], pk.q);
+        }
+        proof.z5[i] = modAdd(alpha_row[i], modMul(challenge, sum_row_s, pk.q), pk.q);
+        proof.z6[i] = modAdd(beta_row[i], modMul(challenge, sum_row_s, pk.q), pk.q);
     }
+    
+    // z7[i] = alpha'_i + c * sum_j S[j][i]
+    // z8[i] = beta'_i + c * sum_j S[j][i]
+    for (size_t i = 0; i < n; ++i) {
+        sum_col_s = ZERO;
+        for (size_t j = 0; j < n; ++j) {
+            sum_col_s = modAdd(sum_col_s, S_matrix[j][i], pk.q);
+        }
+        proof.z7[i] = modAdd(alpha_col[i], modMul(challenge, sum_col_s, pk.q), pk.q);
+        proof.z8[i] = modAdd(beta_col[i], modMul(challenge, sum_col_s, pk.q), pk.q);
+    }
+    
+    // z9 = sum_i alpha_i + c * sum_{i,j} S[i][j]
+    // z10 = sum_i beta_i + c * sum_{i,j} S[i][j]
+    mpz_class sum_all_s = ZERO;
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            sum_all_s = modAdd(sum_all_s, S_matrix[i][j], pk.q);
+        }
+    }
+    proof.z9 = modAdd(alpha_sum, modMul(challenge, sum_all_s, pk.q), pk.q);
+    proof.z10 = modAdd(beta_sum, modMul(challenge, sum_all_s, pk.q), pk.q);
     
     // Compute t = product of (a'_i / a_i^c)
     mpz_class prod_t = ONE;
@@ -323,6 +393,13 @@ void BayerGroth2012::computeResponses(
     
     proof.t = prod_t;
     proof.u = prod_u;
+    
+    // Compute d = product of D[i][π(i)] for permutation commitment
+    mpz_class prod_d = ONE;
+    for (size_t i = 0; i < n; ++i) {
+        prod_d = modMul(prod_d, proof.D[i][permutation[i]], pk.p);
+    }
+    proof.d = prod_d;
 }
 
 std::vector<Ciphertext> BayerGroth2012::shuffle(
@@ -540,8 +617,8 @@ size_t estimateProofSize(const ShuffleProof& proof) {
     for (const auto& val : proof.z6) size += val.get_str().size();
     for (const auto& val : proof.z7) size += val.get_str().size();
     for (const auto& val : proof.z8) size += val.get_str().size();
-    for (const auto& val : proof.z9) size += val.get_str().size();
-    for (const auto& val : proof.z10) size += val.get_str().size();
+    size += proof.z9.get_str().size();
+    size += proof.z10.get_str().size();
     size += proof.t.get_str().size();
     size += proof.u.get_str().size();
     return size;

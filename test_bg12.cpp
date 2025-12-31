@@ -75,10 +75,19 @@ int main() {
     std::cout << "    Time: " << verifyTime.count() << " us" << std::endl;
 
     if (valid) {
-        std::cout << "\n[7] Verify decryption (optional check)" << std::endl;
-        std::cout << "    Note: Full decryption would require secret key" << std::endl;
-        std::cout << "    Input ciphertexts: " << input.size() << std::endl;
-        std::cout << "    Output ciphertexts: " << output.size() << std::endl;
+        std::cout << "\n[7] Verify decryption" << std::endl;
+        bool all_correct = true;
+        for (size_t i = 0; i < output.size(); ++i) {
+            mpz_class decrypted = bg12.decrypt(key.pk, key.sk, output[i]);
+            // output[i] comes from input[perm[i]], which had messages[perm[i]]
+            bool match = (decrypted == messages[perm[i]]);
+            if (!match) {
+                all_correct = false;
+                std::cout << "      Mismatch at position " << i << ": expected " 
+                          << messages[perm[i]] << ", got " << decrypted << std::endl;
+            }
+        }
+        std::cout << "    Decryption: " << (all_correct ? "ALL CORRECT" : "ERROR") << std::endl;
     }
 
     auto end = std::chrono::high_resolution_clock::now();
