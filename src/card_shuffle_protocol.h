@@ -1,7 +1,7 @@
 #ifndef CARD_SHUFFLE_PROTOCOL_H
 #define CARD_SHUFFLE_PROTOCOL_H
 
-#include "bayer_groth_shuffle.h"
+#include "../src/bayer_groth_shuffle.h"
 #include <vector>
 #include <string>
 #include <map>

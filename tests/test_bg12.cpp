@@ -1,4 +1,4 @@
-#include "bayer_groth_shuffle.h"
+#include "../src/bayer_groth_shuffle.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
