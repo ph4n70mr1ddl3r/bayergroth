@@ -4,8 +4,28 @@
 #include <vector>
 #include <random>
 #include <chrono>
+#include <gmpxx.h>
 
 using namespace BG12;
+
+std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng) {
+    std::vector<int> perm(n);
+    std::iota(perm.begin(), perm.end(), 0);
+    std::shuffle(perm.begin(), perm.end(), rng);
+    return perm;
+}
+
+mpz_class generateRandom(const mpz_class& limit, std::mt19937_64& rng) {
+    mpz_class result;
+    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
+    uint64_t randVal = dist(rng);
+    result = mpz_class(randVal);
+    while (result >= limit) {
+        randVal = dist(rng);
+        result = mpz_class(randVal);
+    }
+    return result;
+}
 
 int main() {
     std::cout << "========================================" << std::endl;
@@ -17,7 +37,6 @@ int main() {
 
     std::mt19937_64 rng(12345);
     BayerGroth2012 bg12(64);
-    bg12.setRandomGenerator(rng);
 
     std::cout << "\n[1] Key Generation (64-bit security)" << std::endl;
     KeyPair key = bg12.generateKeyPair();
@@ -38,7 +57,7 @@ int main() {
     std::cout << "    Ciphertext size: " << ctSize << " bytes each" << std::endl;
 
     std::cout << "\n[3] Generate permutation" << std::endl;
-    std::vector<int> perm = BayerGroth2012::generatePermutation(input.size(), rng);
+    std::vector<int> perm = generatePermutation(input.size(), rng);
     std::cout << "    Permutation: ";
     for (size_t i = 0; i < perm.size(); ++i) {
         std::cout << perm[i] << " ";
@@ -48,7 +67,7 @@ int main() {
     std::cout << "\n[4] Generate randomness for each element" << std::endl;
     std::vector<mpz_class> randomness(input.size());
     for (size_t i = 0; i < input.size(); ++i) {
-        randomness[i] = BayerGroth2012::generateRandom(key.pk.q, rng);
+        randomness[i] = generateRandom(key.pk.q, rng);
     }
     std::cout << "    Generated " << randomness.size() << " random values" << std::endl;
 
@@ -79,7 +98,6 @@ int main() {
         bool all_correct = true;
         for (size_t i = 0; i < output.size(); ++i) {
             mpz_class decrypted = bg12.decrypt(key.pk, key.sk, output[i]);
-            // output[i] comes from input[perm[i]], which had messages[perm[i]]
             bool match = (decrypted == messages[perm[i]]);
             if (!match) {
                 all_correct = false;

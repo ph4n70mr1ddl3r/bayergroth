@@ -1,11 +1,5 @@
 #include "bayer_groth_2012.h"
-#include <iostream>
 #include <sstream>
-#include <iomanip>
-#include <chrono>
-#include <algorithm>
-#include <cmath>
-#include <cstring>
 #include <openssl/evp.h>
 
 namespace BG12 {
@@ -31,7 +25,7 @@ mpz_class BayerGroth2012::getSecureRandom(const mpz_class& limit) {
         if (f) {
             size_t read_count = fread(random_bytes.data(), 1, byte_count, f);
             fclose(f);
-            if (read_count < byte_count) {
+            if (read_count < byte_count && read_count > 0) {
                 for (size_t i = read_count; i < byte_count; ++i) {
                     random_bytes[i] = random_bytes[i % read_count];
                 }
@@ -48,22 +42,10 @@ mpz_class BayerGroth2012::getSecureRandom(const mpz_class& limit) {
 }
 
 BayerGroth2012::BayerGroth2012(int securityParameter) 
-    : securityParam(std::max(securityParameter, 256)), randomGen(nullptr), ownsRandomGen(true) {
+    : securityParam(std::max(securityParameter, 256)) {
 }
 
 BayerGroth2012::~BayerGroth2012() {
-    if (ownsRandomGen && randomGen != nullptr) {
-        delete randomGen;
-        randomGen = nullptr;
-    }
-}
-
-void BayerGroth2012::setRandomGenerator(std::mt19937_64& rng) {
-    if (ownsRandomGen && randomGen != nullptr) {
-        delete randomGen;
-    }
-    randomGen = &rng;
-    ownsRandomGen = false;
 }
 
 mpz_class BayerGroth2012::getRandomExponent() {
@@ -83,7 +65,7 @@ KeyPair BayerGroth2012::generateKeyPair() {
         if (f) {
             size_t read_count = fread(seed_bytes.data(), 1, 64, f);
             fclose(f);
-            if (read_count < 64) {
+            if (read_count < 64 && read_count > 0) {
                 for (size_t i = read_count; i < 64; ++i) {
                     seed_bytes[i] = seed_bytes[i % read_count];
                 }
@@ -161,8 +143,6 @@ Ciphertext BayerGroth2012::encrypt(const PublicKey& pk, const mpz_class& message
     mpz_powm(ct.a.get_mpz_t(), pk.g.get_mpz_t(), r.get_mpz_t(), pk.p.get_mpz_t());
     mpz_powm(ct.b.get_mpz_t(), pk.h.get_mpz_t(), r.get_mpz_t(), pk.p.get_mpz_t());
     ct.b = modMul(message, ct.b, pk.p);
-    ct.c = ZERO;
-    ct.d = ONE;
 
     return ct;
 }
@@ -175,8 +155,6 @@ Ciphertext BayerGroth2012::reEncrypt(const PublicKey& pk, const Ciphertext& ct, 
     
     result.a = modMul(ct.a, result.a, pk.p);
     result.b = modMul(ct.b, result.b, pk.p);
-    result.c = ct.c;
-    result.d = ct.d;
     
     return result;
 }
@@ -190,39 +168,18 @@ mpz_class BayerGroth2012::decrypt(const PublicKey& pk, const mpz_class& sk, cons
     return message;
 }
 
-std::vector<int> BayerGroth2012::generatePermutation(size_t n, std::mt19937_64& rng) {
-    std::vector<int> perm(n);
-    std::iota(perm.begin(), perm.end(), 0);
-    std::shuffle(perm.begin(), perm.end(), rng);
-    return perm;
-}
-
-mpz_class BayerGroth2012::generateRandom(const mpz_class& limit, std::mt19937_64& rng) {
-    mpz_class result;
-    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-
-    uint64_t randVal = dist(rng);
-    result = mpz_class(randVal);
-
-    while (result >= limit) {
-        randVal = dist(rng);
-        result = mpz_class(randVal);
-    }
-
-    return result;
-}
-
 bool BayerGroth2012::constantTimeEquals(const mpz_class& a, const mpz_class& b) {
     std::string a_str = a.get_str();
     std::string b_str = b.get_str();
     
-    if (a_str.length() != b_str.length()) {
-        return false;
-    }
+    size_t max_len = a_str.length() > b_str.length() ? a_str.length() : b_str.length();
     
     unsigned char result = 0;
-    for (size_t i = 0; i < a_str.length(); ++i) {
-        result |= (a_str[i] ^ b_str[i]);
+    
+    for (size_t i = 0; i < max_len; ++i) {
+        unsigned char ca = (i < a_str.length()) ? static_cast<unsigned char>(a_str[i]) : 0;
+        unsigned char cb = (i < b_str.length()) ? static_cast<unsigned char>(b_str[i]) : 0;
+        result |= (ca ^ cb);
     }
     
     return result == 0;
@@ -230,14 +187,10 @@ bool BayerGroth2012::constantTimeEquals(const mpz_class& a, const mpz_class& b) 
 
 void BayerGroth2012::generateCommitments(
     const PublicKey& pk,
-    const std::vector<Ciphertext>& input,
-    const std::vector<Ciphertext>& output,
-    const std::vector<mpz_class>& inputRand,
-    const std::vector<mpz_class>& outputRand,
     const std::vector<int>& permutation,
     ShuffleProof& proof) {
 
-    size_t n = input.size();
+    size_t n = permutation.size();
     
     proof.A.resize(n, std::vector<mpz_class>(n));
     proof.B.resize(n, std::vector<mpz_class>(n));
@@ -329,15 +282,13 @@ mpz_class BayerGroth2012::computeChallenge(
 
 void BayerGroth2012::computeResponses(
     const PublicKey& pk,
-    const std::vector<Ciphertext>& input,
-    const std::vector<Ciphertext>& output,
     const std::vector<mpz_class>& inputRand,
     const std::vector<mpz_class>& outputRand,
     const std::vector<int>& permutation,
     const mpz_class& challenge,
     ShuffleProof& proof) {
 
-    size_t n = input.size();
+    size_t n = permutation.size();
     
     proof.z1.resize(n);
     proof.z2.resize(n);
@@ -405,16 +356,6 @@ void BayerGroth2012::computeResponses(
     mpz_class prod_t = ONE;
     mpz_class prod_u = ONE;
     
-    for (size_t i = 0; i < n; ++i) {
-        mpz_class input_a_c = modExp(input[i].a, challenge, pk.p);
-        mpz_class ratio_a = modDiv(output[i].a, input_a_c, pk.p);
-        prod_t = modMul(prod_t, ratio_a, pk.p);
-        
-        mpz_class input_b_c = modExp(input[i].b, challenge, pk.p);
-        mpz_class ratio_b = modDiv(output[i].b, input_b_c, pk.p);
-        prod_u = modMul(prod_u, ratio_b, pk.p);
-    }
-    
     proof.t = prod_t;
     proof.u = prod_u;
     
@@ -477,7 +418,7 @@ std::vector<Ciphertext> BayerGroth2012::shuffle(
         output[i].b = modMul(output[i].b, h_new, pk.p);
     }
     
-    generateCommitments(pk, input, output, randomness, outputRand, permutation, proof);
+    generateCommitments(pk, permutation, proof);
     mpz_class challenge = computeChallenge(pk, input, output, proof);
     
     mpz_class sum_output_rand = ZERO;
@@ -490,7 +431,7 @@ std::vector<Ciphertext> BayerGroth2012::shuffle(
     }
     mpz_class expected_sum_z1 = modAdd(sum_output_rand, modMul(challenge, sum_input_rand, pk.q), pk.q);
     
-    computeResponses(pk, input, output, randomness, outputRand, permutation, challenge, proof);
+    computeResponses(pk, randomness, outputRand, permutation, challenge, proof);
     
     proof.permutation = permutation;
     
@@ -515,6 +456,15 @@ bool BayerGroth2012::verifyEquations(
 
     size_t n = input.size();
     
+    if (n != proof.A.size() || n != proof.B.size() || n != proof.D.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        if (proof.A[i].size() != n || proof.B[i].size() != n || proof.D[i].size() != n) {
+            return false;
+        }
+    }
+    
     mpz_class sum_z1 = ZERO;
     for (size_t i = 0; i < n; ++i) {
         sum_z1 = modAdd(sum_z1, proof.z1[i], pk.q);
@@ -530,9 +480,6 @@ bool BayerGroth2012::verifyEquations(
         return false;
     }
     
-    // Verify z3 and z4 consistency
-    // z3[i] = S[i][π(i)], so A[i][π(i)] = g^{z3[i]}
-    // z4[i] = S[π^{-1}(i)][i], so A[π^{-1}(i)][i] = g^{z4[i]}
     std::vector<int> inv_perm(n);
     for (size_t j = 0; j < n; ++j) {
         inv_perm[proof.permutation[j]] = j;
@@ -549,9 +496,6 @@ bool BayerGroth2012::verifyEquations(
             return false;
         }
     }
-    
-    // Note: Full z2 verification requires knowledge of row_sum which needs discrete log
-    // We skip detailed verification of z2 for the basic implementation
     
     for (size_t i = 0; i < n; ++i) {
         mpz_class prod_A_row_c = ONE;
@@ -616,6 +560,14 @@ bool BayerGroth2012::verifyEquations(
         return false;
     }
     
+    mpz_class expected_d = ONE;
+    for (size_t i = 0; i < n; ++i) {
+        expected_d = modMul(expected_d, proof.D[i][proof.permutation[i]], pk.p);
+    }
+    if (!constantTimeEquals(proof.d, expected_d)) {
+        return false;
+    }
+    
     return true;
 }
 
@@ -633,6 +585,12 @@ bool BayerGroth2012::verify(
     
     if (input.empty()) {
         return true;
+    }
+    
+    if (proof.permutation.empty() || 
+        proof.A.empty() || proof.B.empty() || proof.D.empty() ||
+        proof.z1.empty() || proof.z5.empty()) {
+        return false;
     }
     
     mpz_class challenge = computeChallenge(pk, input, output, proof);
@@ -680,18 +638,6 @@ mpz_class BayerGroth2012::modDiv(const mpz_class& a, const mpz_class& b, const m
     return modMul(a, b_inv, mod);
 }
 
-std::string ciphertextToString(const Ciphertext& ct) {
-    std::ostringstream oss;
-    oss << "(" << ct.a.get_str() << ", " << ct.b.get_str() << ")";
-    return oss.str();
-}
-
-std::string proofToString(const ShuffleProof& proof) {
-    std::ostringstream oss;
-    oss << "Proof with " << proof.A.size() << "x" << (proof.A.empty() ? 0 : proof.A[0].size()) << " commitment matrix";
-    return oss.str();
-}
-
 size_t estimateProofSize(const ShuffleProof& proof) {
     size_t size = 0;
     for (const auto& row : proof.A) {
@@ -700,6 +646,10 @@ size_t estimateProofSize(const ShuffleProof& proof) {
     for (const auto& row : proof.B) {
         for (const auto& val : row) size += val.get_str().size();
     }
+    for (const auto& row : proof.D) {
+        for (const auto& val : row) size += val.get_str().size();
+    }
+    for (const auto& val : proof.permutation) size += sizeof(int);
     for (const auto& val : proof.z1) size += val.get_str().size();
     for (const auto& val : proof.z2) size += val.get_str().size();
     for (const auto& val : proof.z3) size += val.get_str().size();
@@ -712,12 +662,12 @@ size_t estimateProofSize(const ShuffleProof& proof) {
     size += proof.z10.get_str().size();
     size += proof.t.get_str().size();
     size += proof.u.get_str().size();
+    size += proof.d.get_str().size();
     return size;
 }
 
 size_t estimateCiphertextSize(const Ciphertext& ct) {
-    return ct.a.get_str().size() + ct.b.get_str().size() + 
-           ct.c.get_str().size() + ct.d.get_str().size();
+    return ct.a.get_str().size() + ct.b.get_str().size();
 }
 
 } // namespace BG12

@@ -4,49 +4,46 @@
 #include <vector>
 #include <string>
 #include <random>
-#include <memory>
 #include <gmpxx.h>
 #include <openssl/rand.h>
 
 namespace BG12 {
 
 struct PublicKey {
-    mpz_class g;  // Generator
-    mpz_class h;  // g^sk mod p
-    mpz_class q;  // Order of group
-    mpz_class p;  // Prime modulus
+    mpz_class g;
+    mpz_class h;
+    mpz_class q;
+    mpz_class p;
 };
 
 struct KeyPair {
     PublicKey pk;
-    mpz_class sk;  // Secret key
+    mpz_class sk;
 };
 
 struct Ciphertext {
-    mpz_class a;  // g^r
-    mpz_class b;  // h^r * m
-    mpz_class c;
-    mpz_class d;
+    mpz_class a;
+    mpz_class b;
 };
 
 struct ShuffleProof {
-    std::vector<std::vector<mpz_class>> A;  // Commitment matrix g^S
-    std::vector<std::vector<mpz_class>> B;  // Commitment matrix h^S
-    std::vector<std::vector<mpz_class>> D;  // Pedersen commitment matrix g^alpha * h^beta (for permutation proof)
-    std::vector<int> permutation;           // The permutation used in shuffle
-    std::vector<mpz_class> z1;  // z1[i] = r'_i + c * rho_{pi(i)}
-    std::vector<mpz_class> z2;  // z2[i] = rho_i + c * (row sums)
-    std::vector<mpz_class> z3;  // z3[i] = S[i][π(i)]
-    std::vector<mpz_class> z4;  // z4[i] = S[π^{-1}(i)][i]
-    std::vector<mpz_class> z5;  // z5[i] = c * sum_j S[i][j]
-    std::vector<mpz_class> z6;  // z6[i] = c * sum_j S[i][j]
-    std::vector<mpz_class> z7;  // z7[i] = c * sum_j S[j][i]
-    std::vector<mpz_class> z8;  // z8[i] = c * sum_j S[j][i]
-    mpz_class z9;   // z9 = c * sum_{i,j} S[i][j]
-    mpz_class z10;  // z10 = c * sum_{i,j} S[i][j]
-    mpz_class t;  // t = product of (a'_i / a_i^c)
-    mpz_class u;  // u = product of (b'_i / b_i^c)
-    mpz_class d;  // d = commitment to permutation (product of diagonal elements)
+    std::vector<std::vector<mpz_class>> A;
+    std::vector<std::vector<mpz_class>> B;
+    std::vector<std::vector<mpz_class>> D;
+    std::vector<int> permutation;
+    std::vector<mpz_class> z1;
+    std::vector<mpz_class> z2;
+    std::vector<mpz_class> z3;
+    std::vector<mpz_class> z4;
+    std::vector<mpz_class> z5;
+    std::vector<mpz_class> z6;
+    std::vector<mpz_class> z7;
+    std::vector<mpz_class> z8;
+    mpz_class z9;
+    mpz_class z10;
+    mpz_class t;
+    mpz_class u;
+    mpz_class d;
 };
 
 class BayerGroth2012 {
@@ -72,56 +69,36 @@ public:
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof);
 
-    void setRandomGenerator(std::mt19937_64& rng);
-    std::mt19937_64* getRandomGenerator() { return randomGen; }
-    
-    // Make computeChallenge public for testing
     mpz_class computeChallenge(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof);
 
-    // Static utility functions
     static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod);
     static mpz_class modInv(const mpz_class& a, const mpz_class& mod);
     static mpz_class modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
     static mpz_class modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
     static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
     static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
-    static mpz_class generateRandom(const mpz_class& limit, std::mt19937_64& rng);
 
-    // Cryptographically secure random generation
     static mpz_class getSecureRandom(const mpz_class& limit);
-    
-    // Timing-safe comparison
     static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
 
 private:
     int securityParam;
-    std::mt19937_64* randomGen;
-    bool ownsRandomGen;
     PublicKey currentPk;
-
     std::vector<std::vector<mpz_class>> S_matrix;
 
     mpz_class getRandomExponent();
     
-    // BG12 specific functions
     void generateCommitments(
         const PublicKey& pk,
-        const std::vector<Ciphertext>& input,
-        const std::vector<Ciphertext>& output,
-        const std::vector<mpz_class>& inputRand,
-        const std::vector<mpz_class>& outputRand,
         const std::vector<int>& permutation,
         ShuffleProof& proof);
 
     void computeResponses(
         const PublicKey& pk,
-        const std::vector<Ciphertext>& input,
-        const std::vector<Ciphertext>& output,
         const std::vector<mpz_class>& inputRand,
         const std::vector<mpz_class>& outputRand,
         const std::vector<int>& permutation,
@@ -136,12 +113,9 @@ private:
         const mpz_class& challenge);
 };
 
-// Utility functions
-std::string ciphertextToString(const Ciphertext& ct);
-std::string proofToString(const ShuffleProof& proof);
 size_t estimateProofSize(const ShuffleProof& proof);
 size_t estimateCiphertextSize(const Ciphertext& ct);
 
 } // namespace BG12
 
-#endif // BAYER_GROTH_2012_H
+#endif
