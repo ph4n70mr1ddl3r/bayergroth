@@ -112,6 +112,7 @@ void TwoPlayerCardShuffle::player1Shuffle() {
     round.playerIndex = 0;
     round.proof = proof;
     round.permutation = permutation;
+    round.inputCards = inputCards;
     deckState.shuffleHistory.push_back(round);
 
     deckState.currentPlayerIndex = 1;

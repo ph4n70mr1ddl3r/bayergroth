@@ -460,7 +460,7 @@ void BayerGrothShuffle::computeResponses(
     for (size_t i = 0; i < n; ++i) {
         proof.z3[i] = S_matrix[i][permutation[i]];
     }
-    
+
     for (size_t i = 0; i < n; ++i) {
         proof.z4[i] = S_matrix[inv_perm[i]][i];
     }
