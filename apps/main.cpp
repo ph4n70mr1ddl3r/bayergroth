@@ -27,8 +27,9 @@ int main() {
 
     auto totalStart = std::chrono::high_resolution_clock::now();
 
-    std::mt19937_64 rng1(12345);
-    std::mt19937_64 rng2(67890);
+    std::random_device rd;
+    std::mt19937_64 rng1(rd());
+    std::mt19937_64 rng2(rd());
 
     BayerGrothShuffle shuffle(256);
 

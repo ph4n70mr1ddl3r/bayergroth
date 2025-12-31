@@ -5,6 +5,20 @@
 
 namespace BayerGroth {
 
+struct EvpMdCtx {
+    EVP_MD_CTX* ctx;
+    EvpMdCtx() : ctx(EVP_MD_CTX_new()) {
+        if (!ctx) throw std::runtime_error("Failed to create EVP_MD_CTX");
+    }
+    ~EvpMdCtx() {
+        if (ctx) EVP_MD_CTX_free(ctx);
+    }
+    EvpMdCtx(const EvpMdCtx&) = delete;
+    EvpMdCtx& operator=(const EvpMdCtx&) = delete;
+    EVP_MD_CTX* get() noexcept { return ctx; }
+    const EVP_MD_CTX* get() const noexcept { return ctx; }
+};
+
 static const mpz_class ZERO(0);
 static const mpz_class ONE(1);
 static const mpz_class TWO(2);
@@ -29,7 +43,7 @@ BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     rng.seed(rd());
 }
 
-BayerGrothShuffle::~BayerGrothShuffle() {
+BayerGrothShuffle::~BayerGrothShuffle() noexcept {
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) {
@@ -79,13 +93,11 @@ static std::vector<unsigned char> getRandomBytes(size_t byte_count) {
         if (f) {
             size_t read_count = fread(random_bytes.data(), 1, byte_count, f);
             fclose(f);
-            if (read_count < byte_count) {
-                for (size_t i = read_count; i < byte_count; ++i) {
-                    random_bytes[i] = random_bytes[i % read_count];
-                }
+            if (read_count != byte_count) {
+                throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
             }
         } else {
-            throw std::runtime_error("Failed to read from /dev/urandom");
+            throw std::runtime_error("Failed to read from /dev/urandom and OpenSSL RAND_bytes failed");
         }
     }
     return random_bytes;
@@ -354,48 +366,43 @@ mpz_class BayerGrothShuffle::computeChallenge(
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len;
     
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) {
-        throw std::runtime_error("Failed to create EVP_MD_CTX");
-    }
+    EvpMdCtx evpCtx;
+    EVP_DigestInit_ex(evpCtx.get(), EVP_sha256(), nullptr);
     
-    EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
-    
-    hashMpzToDigest(ctx, pk.g);
-    hashMpzToDigest(ctx, pk.h);
-    hashMpzToDigest(ctx, pk.q);
-    hashMpzToDigest(ctx, pk.p);
+    hashMpzToDigest(evpCtx.get(), pk.g);
+    hashMpzToDigest(evpCtx.get(), pk.h);
+    hashMpzToDigest(evpCtx.get(), pk.q);
+    hashMpzToDigest(evpCtx.get(), pk.p);
     
     for (size_t i = 0; i < proof.A.size(); ++i) {
         for (size_t j = 0; j < proof.A[i].size(); ++j) {
-            hashMpzToDigest(ctx, proof.A[i][j]);
+            hashMpzToDigest(evpCtx.get(), proof.A[i][j]);
         }
     }
     
     for (size_t i = 0; i < proof.B.size(); ++i) {
         for (size_t j = 0; j < proof.B[i].size(); ++j) {
-            hashMpzToDigest(ctx, proof.B[i][j]);
+            hashMpzToDigest(evpCtx.get(), proof.B[i][j]);
         }
     }
     
     for (size_t i = 0; i < proof.D.size(); ++i) {
         for (size_t j = 0; j < proof.D[i].size(); ++j) {
-            hashMpzToDigest(ctx, proof.D[i][j]);
+            hashMpzToDigest(evpCtx.get(), proof.D[i][j]);
         }
     }
     
     for (const auto& ct : input) {
-        hashMpzToDigest(ctx, ct.a);
-        hashMpzToDigest(ctx, ct.b);
+        hashMpzToDigest(evpCtx.get(), ct.a);
+        hashMpzToDigest(evpCtx.get(), ct.b);
     }
     
     for (const auto& ct : output) {
-        hashMpzToDigest(ctx, ct.a);
-        hashMpzToDigest(ctx, ct.b);
+        hashMpzToDigest(evpCtx.get(), ct.a);
+        hashMpzToDigest(evpCtx.get(), ct.b);
     }
     
-    EVP_DigestFinal_ex(ctx, hash, &hash_len);
-    EVP_MD_CTX_free(ctx);
+    EVP_DigestFinal_ex(evpCtx.get(), hash, &hash_len);
     
     mpz_class challenge = ZERO;
     for (unsigned int i = 0; i < hash_len; ++i) {

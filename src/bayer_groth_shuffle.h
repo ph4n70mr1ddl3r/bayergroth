@@ -2,7 +2,6 @@
 #define BAYER_GROTH_SHUFFLE_H
 
 #include <vector>
-#include <string>
 #include <random>
 #include <gmpxx.h>
 #include <openssl/rand.h>
@@ -49,7 +48,7 @@ struct ShuffleProof {
 class BayerGrothShuffle {
 public:
     explicit BayerGrothShuffle(int securityParam = 256);
-    ~BayerGrothShuffle();
+    ~BayerGrothShuffle() noexcept;
 
     void setRandomGenerator(std::mt19937_64 rng);
 

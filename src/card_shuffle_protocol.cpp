@@ -7,13 +7,16 @@
 
 namespace CardShuffle {
 
-std::string Card::toString() const {
+std::string Card::toString() const noexcept {
     static const char* ranks[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
     static const char* suits[] = {"♥", "♦", "♣", "♠"};
     return std::string(ranks[rank]) + suits[suit];
 }
 
-int Card::toInt() const {
+int Card::toInt() const noexcept {
+    if (suit < 0 || suit >= 4 || rank < 0 || rank >= 13) {
+        return 0;
+    }
     return suit * 13 + rank;
 }
 
@@ -24,13 +27,13 @@ Card Card::fromInt(int value) {
     return card;
 }
 
-TwoPlayerCardShuffle::TwoPlayerCardShuffle() : securityParam(256) {
+TwoPlayerCardShuffle::TwoPlayerCardShuffle() : shuffler(256), securityParam(256) {
     std::random_device rd;
     player1.rng.seed(rd());
     player2.rng.seed(rd() + 1);
 }
 
-TwoPlayerCardShuffle::~TwoPlayerCardShuffle() {
+TwoPlayerCardShuffle::~TwoPlayerCardShuffle() noexcept {
 }
 
 void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, const std::string& player2Name) {
@@ -51,7 +54,6 @@ void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, con
 }
 
 BayerGroth::Ciphertext TwoPlayerCardShuffle::encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng) {
-    BayerGroth::BayerGrothShuffle shuffler(securityParam);
     shuffler.setRandomGenerator(rng);
     return shuffler.encrypt(pk, mpz_class(card.toInt() + 1));
 }
@@ -72,9 +74,9 @@ void TwoPlayerCardShuffle::setupDeck() {
     deckState.currentPlayerIndex = 0;
 
     std::cout << "\n=== Setting Up Deck ===" << std::endl;
-    std::cout << "Encrypting 52 cards with " << player1.name << "'s public key..." << std::endl;
+    std::cout << "Encrypting " << DECK_SIZE << " cards with " << player1.name << "'s public key..." << std::endl;
 
-    for (int i = 0; i < 52; ++i) {
+    for (int i = 0; i < DECK_SIZE; ++i) {
         Card card = Card::fromInt(i);
         BayerGroth::Ciphertext ct = encryptCard(player1.keyPair.pk, card, player1.rng);
         deckState.encryptedCards.push_back(ct);
@@ -86,7 +88,6 @@ void TwoPlayerCardShuffle::setupDeck() {
 void TwoPlayerCardShuffle::player1Shuffle() {
     std::cout << "\n=== " << player1.name << "'s Shuffle ===" << std::endl;
 
-    BayerGroth::BayerGrothShuffle shuffler(securityParam);
     shuffler.setRandomGenerator(player1.rng);
 
     size_t n = deckState.encryptedCards.size();
@@ -129,7 +130,6 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
         return false;
     }
 
-    BayerGroth::BayerGrothShuffle shuffler(securityParam);
     shuffler.setRandomGenerator(player2.rng);
 
     std::vector<BayerGroth::Ciphertext> inputBeforeShuffle;
@@ -204,7 +204,6 @@ bool TwoPlayerCardShuffle::player1Verify() {
         return false;
     }
 
-    BayerGroth::BayerGrothShuffle shuffler(securityParam);
     shuffler.setRandomGenerator(player2.rng);
 
     std::vector<BayerGroth::Ciphertext> inputBeforeShuffle = deckState.shuffleHistory[deckState.shuffleHistory.size() - 1].inputCards;

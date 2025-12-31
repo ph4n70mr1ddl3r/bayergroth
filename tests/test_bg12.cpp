@@ -17,10 +17,10 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
     std::mt19937_64 rng(12345);
-    BayerGrothShuffle bg12(64);
+    BayerGrothShuffle bg12(256);
     bg12.setRandomGenerator(rng);
 
-    std::cout << "\n[1] Key Generation (64-bit security)" << std::endl;
+    std::cout << "\n[1] Key Generation (256-bit security)" << std::endl;
     KeyPair key = bg12.generateKeyPair();
     std::cout << "    |p| = " << mpz_sizeinbase(key.pk.p.get_mpz_t(), 2) << " bits" << std::endl;
     std::cout << "    |q| = " << mpz_sizeinbase(key.pk.q.get_mpz_t(), 2) << " bits" << std::endl;

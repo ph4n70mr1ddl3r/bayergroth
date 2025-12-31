@@ -15,8 +15,8 @@ enum Suit { HEARTS, DIAMONDS, CLUBS, SPADES };
 struct Card {
     int rank;
     Suit suit;
-    std::string toString() const;
-    int toInt() const;
+    std::string toString() const noexcept;
+    int toInt() const noexcept;
     static Card fromInt(int value);
 };
 
@@ -43,7 +43,7 @@ struct DeckState {
 class TwoPlayerCardShuffle {
 public:
     TwoPlayerCardShuffle();
-    ~TwoPlayerCardShuffle();
+    ~TwoPlayerCardShuffle() noexcept;
 
     void initializePlayers(const std::string& player1Name, const std::string& player2Name);
     void setupDeck();
@@ -55,6 +55,7 @@ public:
     void printDeckState();
 
 private:
+    BayerGroth::BayerGrothShuffle shuffler;
     Player player1;
     Player player2;
     DeckState deckState;
