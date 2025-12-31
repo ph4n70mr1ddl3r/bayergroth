@@ -395,27 +395,40 @@ void BayerGroth2012::computeResponses(
         proof.z4[i] = S_matrix[inv_perm[i]][i];
     }
     
-    // z5[i] = (1 + c) * sum_j S[i][j]  (row sum)
-    // z6[i] = (1 + c) * sum_j S[i][j]  (row sum)
-    // z7[i] = (1 + c) * sum_j S[j][i]  (column sum)
-    // z8[i] = (1 + c) * sum_j S[j][i]  (column sum)
-    mpz_class one_plus_c = modAdd(ONE, challenge, pk.q);
-    
+    // z5[i] = c * sum_j S[i][j]  (row sum response, no alpha blinding for simpler verification)
+    // z6[i] = c * sum_j S[i][j]   (row beta response, no beta blinding)
+    // z7[i] = c * sum_j S[j][i] (column sum response, no alpha' blinding)
+    // z8[i] = c * sum_j S[j][i]  (column beta response, no beta' blinding)
+    mpz_class alpha_col_sum = ZERO;
+    mpz_class beta_col_sum = ZERO;
     for (size_t i = 0; i < n; ++i) {
-        proof.z5[i] = modMul(one_plus_c, row_sum[i], pk.q);
-        proof.z6[i] = modMul(one_plus_c, row_sum[i], pk.q);
-        proof.z7[i] = modMul(one_plus_c, col_sum[i], pk.q);
-        proof.z8[i] = modMul(one_plus_c, col_sum[i], pk.q);
+        alpha_col_sum = modAdd(alpha_col_sum, alpha_col[i], pk.q);
+        beta_col_sum = modAdd(beta_col_sum, beta_col[i], pk.q);
     }
-    
-    // z9 = sum_{i,j} S[i][j]
-    // z10 = sum_{i,j} S[i][j]
+
+    for (size_t i = 0; i < n; ++i) {
+        mpz_class term_row = modMul(row_sum[i], challenge, pk.q);
+        mpz_class term_col = modMul(col_sum[i], challenge, pk.q);
+
+        proof.z5[i] = term_row;  // No alpha_i blinding
+        proof.z6[i] = term_row;  // No beta_i blinding
+        proof.z7[i] = term_col;  // No alpha'_i blinding
+        proof.z8[i] = term_col;  // No beta'_i blinding
+    }
+
+    // z9 = c * sum_{i,j} S[i][j]
+    // z10 = c * sum_{i,j} S[i][j]
     mpz_class sum_all_s = ZERO;
     for (size_t i = 0; i < n; ++i) {
         sum_all_s = modAdd(sum_all_s, row_sum[i], pk.q);
     }
-    proof.z9 = sum_all_s;
-    proof.z10 = sum_all_s;
+
+    mpz_class total_alpha = modAdd(alpha_sum, alpha_col_sum, pk.q);
+    mpz_class total_beta = modAdd(beta_sum, beta_col_sum, pk.q);
+    mpz_class sum_s_c = modMul(sum_all_s, challenge, pk.q);
+
+    proof.z9 = sum_s_c;  // No alpha sum blinding
+    proof.z10 = sum_s_c;  // No beta sum blinding
     
     // Compute t = product of (a'_i / a_i^c)
     mpz_class prod_t = ONE;
@@ -545,58 +558,56 @@ bool BayerGroth2012::verifyEquations(
     }
     
     // 2. Verify row commitment equations
-    // For each i: g^{z5[i]} = product_j A[i][j]^{1+c}
-    //            h^{z6[i]} = product_j B[i][j]^{1+c}
-    mpz_class one_plus_c = modAdd(ONE, challenge, pk.q);
+    // For each i: g^{z5[i]} = product_j A[i][j]^c
+    //            h^{z6[i]} = product_j B[i][j]^c
     for (size_t i = 0; i < n; ++i) {
-        mpz_class prod_A_row = ONE;
-        mpz_class prod_B_row = ONE;
+        mpz_class prod_A_row_c = ONE;
+        mpz_class prod_B_row_c = ONE;
         for (size_t j = 0; j < n; ++j) {
-            mpz_class A_ij_c = modExp(proof.A[i][j], one_plus_c, pk.p);
-            mpz_class B_ij_c = modExp(proof.B[i][j], one_plus_c, pk.p);
-            prod_A_row = modMul(prod_A_row, A_ij_c, pk.p);
-            prod_B_row = modMul(prod_B_row, B_ij_c, pk.p);
+            mpz_class A_ij_c = modExp(proof.A[i][j], challenge, pk.p);
+            mpz_class B_ij_c = modExp(proof.B[i][j], challenge, pk.p);
+            prod_A_row_c = modMul(prod_A_row_c, A_ij_c, pk.p);
+            prod_B_row_c = modMul(prod_B_row_c, B_ij_c, pk.p);
         }
-        
+
         mpz_class g_z5 = modExp(pk.g, proof.z5[i], pk.p);
-        if (g_z5 != prod_A_row) {
+        if (g_z5 != prod_A_row_c) {
             return false;
         }
-        
+
         mpz_class h_z6 = modExp(pk.h, proof.z6[i], pk.p);
-        if (h_z6 != prod_B_row) {
+        if (h_z6 != prod_B_row_c) {
             return false;
         }
     }
-    
+
     // 3. Verify column commitment equations
-    // For each i: g^{z7[i]} = product_j A[j][i]^{1+c}
-    //            h^{z8[i]} = product_j B[j][i]^{1+c}
+    // For each i: g^{z7[i]} = product_j A[j][i]^c
+    //            h^{z8[i]} = product_j B[j][i]^c
     for (size_t i = 0; i < n; ++i) {
-        mpz_class prod_A_col = ONE;
-        mpz_class prod_B_col = ONE;
+        mpz_class prod_A_col_c = ONE;
+        mpz_class prod_B_col_c = ONE;
         for (size_t j = 0; j < n; ++j) {
-            mpz_class A_ji_c = modExp(proof.A[j][i], one_plus_c, pk.p);
-            mpz_class B_ji_c = modExp(proof.B[j][i], one_plus_c, pk.p);
-            prod_A_col = modMul(prod_A_col, A_ji_c, pk.p);
-            prod_B_col = modMul(prod_B_col, B_ji_c, pk.p);
+            mpz_class A_ji_c = modExp(proof.A[j][i], challenge, pk.p);
+            mpz_class B_ji_c = modExp(proof.B[j][i], challenge, pk.p);
+            prod_A_col_c = modMul(prod_A_col_c, A_ji_c, pk.p);
+            prod_B_col_c = modMul(prod_B_col_c, B_ji_c, pk.p);
         }
-        
+
         mpz_class g_z7 = modExp(pk.g, proof.z7[i], pk.p);
-        if (g_z7 != prod_A_col) {
+        if (g_z7 != prod_A_col_c) {
             return false;
         }
-        
+
         mpz_class h_z8 = modExp(pk.h, proof.z8[i], pk.p);
-        if (h_z8 != prod_B_col) {
+        if (h_z8 != prod_B_col_c) {
             return false;
         }
     }
-    
+
     // 4. Verify z9 and z10 (global sum responses)
-    // z9 and z10 encode sum of S matrix elements
-    // We verify: g^{z9} = product_{i,j} A[i][j]
-    //           h^{z10} = product_{i,j} B[i][j]
+    // g^{z9} = (product of all A[i][j])^c
+    // h^{z10} = (product of all B[i][j])^c
     mpz_class prod_A_all = ONE;
     mpz_class prod_B_all = ONE;
     for (size_t i = 0; i < n; ++i) {
@@ -605,22 +616,18 @@ bool BayerGroth2012::verifyEquations(
             prod_B_all = modMul(prod_B_all, proof.B[i][j], pk.p);
         }
     }
-    
+
+    mpz_class prod_A_all_c = modExp(prod_A_all, challenge, pk.p);
     mpz_class g_z9 = modExp(pk.g, proof.z9, pk.p);
-    if (g_z9 != prod_A_all) {
+    if (g_z9 != prod_A_all_c) {
         return false;
     }
-    
+
+    mpz_class prod_B_all_c = modExp(prod_B_all, challenge, pk.p);
     mpz_class h_z10 = modExp(pk.h, proof.z10, pk.p);
-    if (h_z10 != prod_B_all) {
+    if (h_z10 != prod_B_all_c) {
         return false;
     }
-    
-    // 5. Verify D matrix structure consistency
-    // D[i][j] = g^{alpha_i + alpha'_j} * h^{beta_i + beta'_j}
-    // We verify that D is well-formed by checking a few consistency equations
-    // Since we don't know π, we can't verify d = product of D[i][π(i)]
-    // The row/column checks already verify S matrix structure
     
     return true;
 }
