@@ -1,11 +1,11 @@
-#include "bayer_groth_2012.h"
+#include "bayer_groth_shuffle.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <random>
 #include <chrono>
 
-using namespace BG12;
+using namespace BayerGroth;
 
 int main() {
     std::cout << "========================================" << std::endl;
@@ -17,8 +17,7 @@ int main() {
 
     std::mt19937_64 rng(12345);
     
-    // Use 64-bit security for faster demo
-    BayerGroth2012 bg12(64);
+    BayerGrothShuffle bg12(64);
     bg12.setRandomGenerator(rng);
 
     std::cout << "\n[1] Key Generation (64-bit security)" << std::endl;
@@ -31,9 +30,8 @@ int main() {
     std::cout << "    g = " << key.pk.g << std::endl;
     std::cout << "    h = " << key.pk.h << std::endl;
 
-    // Test generateRandom
-    std::cout << "\n[1.5] Testing generateRandom" << std::endl;
-    mpz_class testRand = BayerGroth2012::generateRandom(key.pk.q, rng);
+    std::cout << "\n[1.5] Testing generateRandomNumber" << std::endl;
+    mpz_class testRand = bg12.generateRandomNumber(key.pk.q);
     std::cout << "    Random in [0, q): " << testRand << std::endl;
     std::cout << "    q = " << key.pk.q << std::endl;
 
@@ -49,7 +47,7 @@ int main() {
     std::vector<Ciphertext> input(1, ct);
     std::vector<int> perm = {0};
     std::vector<mpz_class> rand(1);
-    rand[0] = BayerGroth2012::generateRandom(key.pk.q, rng);
+    rand[0] = bg12.generateRandomNumber(key.pk.q);
     ShuffleProof proof;
     
     auto shuffleStart = std::chrono::high_resolution_clock::now();

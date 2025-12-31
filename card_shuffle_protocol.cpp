@@ -97,18 +97,13 @@ void TwoPlayerCardShuffle::player1Shuffle() {
         reencryptionRand[i] = shuffler.generateRandomNumber(player1.keyPair.pk.q);
     }
 
+    BayerGroth::ShuffleProof proof;
     deckState.encryptedCards = shuffler.shuffle(
         player1.keyPair.pk,
         deckState.encryptedCards,
         reencryptionRand,
-        permutation
-    );
-
-    BayerGroth::ShuffleProof proof = shuffler.prove(
-        player1.keyPair.pk,
-        deckState.encryptedCards, deckState.encryptedCards,
-        std::vector<mpz_class>(n), reencryptionRand,
-        permutation
+        permutation,
+        proof
     );
 
     ShuffleRound round;
@@ -150,9 +145,13 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 
         mpz_class new_a = ct.a * g_r % player2.keyPair.pk.p;
         mpz_class new_b = ct.b * h_r % player2.keyPair.pk.p;
+        mpz_class new_c = ct.c * g_r % player2.keyPair.pk.p;
+        mpz_class new_d = ct.d * h_r % player2.keyPair.pk.p;
 
         ct.a = new_a;
         ct.b = new_b;
+        ct.c = new_c;
+        ct.d = new_d;
     }
 
     std::cout << "Shuffling deck..." << std::endl;
@@ -166,18 +165,13 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
         reencryptionRand[i] = s3.generateRandomNumber(player2.keyPair.pk.q);
     }
 
+    BayerGroth::ShuffleProof proof;
     deckState.encryptedCards = shuffler.shuffle(
         player2.keyPair.pk,
         deckState.encryptedCards,
         reencryptionRand,
-        permutation
-    );
-
-    BayerGroth::ShuffleProof proof = shuffler.prove(
-        player2.keyPair.pk,
-        deckState.encryptedCards, deckState.encryptedCards,
-        std::vector<mpz_class>(n), reencryptionRand,
-        permutation
+        permutation,
+        proof
     );
 
     ShuffleRound round;

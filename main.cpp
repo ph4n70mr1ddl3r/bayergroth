@@ -19,11 +19,6 @@ std::string formatCard(int value) {
     return std::string(RANKS[rank]) + SUITS[suit];
 }
 
-size_t estimateCiphertextSize(const Ciphertext& ct) {
-    return ct.a.get_str().size() + ct.b.get_str().size() + 
-           ct.c.get_str().size() + ct.d.get_str().size();
-}
-
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "  Two-Player Card Shuffle Protocol" << std::endl;
@@ -80,7 +75,8 @@ int main() {
     }
 
     auto shuffle1Start = std::chrono::high_resolution_clock::now();
-    deck = shuffle.shuffle(aliceKey.pk, deck, rand1, perm1);
+    ShuffleProof proof1;
+    deck = shuffle.shuffle(aliceKey.pk, deck, rand1, perm1, proof1);
     auto shuffle1End = std::chrono::high_resolution_clock::now();
     auto shuffle1Duration = std::chrono::duration_cast<std::chrono::microseconds>(shuffle1End - shuffle1Start);
 
@@ -98,6 +94,8 @@ int main() {
         mpz_class h_r = shuffle.modExp(bobKey.pk.h, r, bobKey.pk.p);
         deck[i].a = shuffle.modMul(deck[i].a, g_r, bobKey.pk.p);
         deck[i].b = shuffle.modMul(deck[i].b, h_r, bobKey.pk.p);
+        deck[i].c = shuffle.modMul(deck[i].c, g_r, bobKey.pk.p);
+        deck[i].d = shuffle.modMul(deck[i].d, h_r, bobKey.pk.p);
     }
     auto reencryptEnd = std::chrono::high_resolution_clock::now();
     auto reencryptDuration = std::chrono::duration_cast<std::chrono::microseconds>(reencryptEnd - reencryptStart);
@@ -111,7 +109,8 @@ int main() {
     }
 
     auto shuffle2Start = std::chrono::high_resolution_clock::now();
-    deck = shuffle.shuffle(bobKey.pk, deck, rand2, perm2);
+    ShuffleProof proof2;
+    deck = shuffle.shuffle(bobKey.pk, deck, rand2, perm2, proof2);
     auto shuffle2End = std::chrono::high_resolution_clock::now();
     auto shuffle2Duration = std::chrono::duration_cast<std::chrono::microseconds>(shuffle2End - shuffle2Start);
 

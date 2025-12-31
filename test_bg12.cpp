@@ -1,4 +1,4 @@
-#include "bayer_groth_2012.h"
+#include "bayer_groth_shuffle.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -6,25 +6,13 @@
 #include <chrono>
 #include <gmpxx.h>
 
-using namespace BG12;
+using namespace BayerGroth;
 
 std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng) {
     std::vector<int> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
     std::shuffle(perm.begin(), perm.end(), rng);
     return perm;
-}
-
-mpz_class generateRandom(const mpz_class& limit, std::mt19937_64& rng) {
-    mpz_class result;
-    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-    uint64_t randVal = dist(rng);
-    result = mpz_class(randVal);
-    while (result >= limit) {
-        randVal = dist(rng);
-        result = mpz_class(randVal);
-    }
-    return result;
 }
 
 int main() {
@@ -36,7 +24,8 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
     std::mt19937_64 rng(12345);
-    BayerGroth2012 bg12(64);
+    BayerGrothShuffle bg12(64);
+    bg12.setRandomGenerator(rng);
 
     std::cout << "\n[1] Key Generation (64-bit security)" << std::endl;
     KeyPair key = bg12.generateKeyPair();
@@ -67,7 +56,7 @@ int main() {
     std::cout << "\n[4] Generate randomness for each element" << std::endl;
     std::vector<mpz_class> randomness(input.size());
     for (size_t i = 0; i < input.size(); ++i) {
-        randomness[i] = generateRandom(key.pk.q, rng);
+        randomness[i] = bg12.generateRandomNumber(key.pk.q);
     }
     std::cout << "    Generated " << randomness.size() << " random values" << std::endl;
 
