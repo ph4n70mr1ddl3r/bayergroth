@@ -8,13 +8,6 @@
 
 using namespace BayerGroth;
 
-std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng) {
-    std::vector<int> perm(n);
-    std::iota(perm.begin(), perm.end(), 0);
-    std::shuffle(perm.begin(), perm.end(), rng);
-    return perm;
-}
-
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "  Bayer-Groth 2012 Shuffle Protocol" << std::endl;
@@ -46,7 +39,7 @@ int main() {
     std::cout << "    Ciphertext size: " << ctSize << " bytes each" << std::endl;
 
     std::cout << "\n[3] Generate permutation" << std::endl;
-    std::vector<int> perm = generatePermutation(input.size(), rng);
+    std::vector<int> perm = BayerGrothShuffle::generatePermutation(input.size(), rng);
     std::cout << "    Permutation: ";
     for (size_t i = 0; i < perm.size(); ++i) {
         std::cout << perm[i] << " ";
