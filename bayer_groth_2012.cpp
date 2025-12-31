@@ -78,38 +78,49 @@ mpz_class BayerGroth2012::getRandomExponent() {
 KeyPair BayerGroth2012::generateKeyPair() {
     KeyPair keyPair;
 
-    mpz_class p_candidate;
-    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
+    gmp_randstate_t randState;
+    gmp_randinit_default(randState);
     
-    // Generate prime p such that q = (p-1)/2 is also prime (Sophie Germain prime pair)
-    uint64_t p_rand = dist(*randomGen);
-    p_candidate = mpz_class(p_rand);
-    mpz_class q_candidate;
-    while (true) {
-        while (mpz_probab_prime_p(p_candidate.get_mpz_t(), 10) == 0) {
-            p_rand = dist(*randomGen);
-            p_candidate = mpz_class(p_rand);
+    std::vector<unsigned char> seed_bytes(64);
+    int result = RAND_bytes(seed_bytes.data(), 64);
+    if (result != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(seed_bytes.data(), 1, 64, f);
+            fclose(f);
         }
-        q_candidate = (p_candidate - ONE) / TWO;
-        if (mpz_probab_prime_p(q_candidate.get_mpz_t(), 10) != 0) {
-            break;
-        }
-        p_rand = dist(*randomGen);
-        p_candidate = mpz_class(p_rand);
     }
-    keyPair.pk.p = p_candidate;
-    keyPair.pk.q = q_candidate;
+    mpz_class seed_mpz = 0;
+    for (size_t i = 0; i < 64; ++i) {
+        seed_mpz = seed_mpz * 256 + seed_bytes[i];
+    }
+    gmp_randseed(randState, seed_mpz.get_mpz_t());
+
+    size_t p_bits = securityParam >= 256 ? securityParam : 256;
+    size_t q_bits = p_bits - 1;
     
-    // Find a generator g of order-q subgroup
-    // g must be a quadratic residue with order exactly q
-    // We compute g = a^2 mod p for random a, then verify g^q = 1 and g ≠ 1
-    mpz_class a, g_candidate, g_power;
+    mpz_urandomb(keyPair.pk.p.get_mpz_t(), randState, p_bits);
+    mpz_nextprime(keyPair.pk.p.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+    
+    mpz_sub(keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t(), ONE.get_mpz_t());
+    mpz_divexact(keyPair.pk.q.get_mpz_t(), keyPair.pk.q.get_mpz_t(), TWO.get_mpz_t());
+    while (mpz_probab_prime_p(keyPair.pk.q.get_mpz_t(), 25) == 0) {
+        mpz_add(keyPair.pk.p.get_mpz_t(), keyPair.pk.p.get_mpz_t(), TWO.get_mpz_t());
+        while (mpz_probab_prime_p(keyPair.pk.p.get_mpz_t(), 25) == 0) {
+            mpz_urandomb(keyPair.pk.p.get_mpz_t(), randState, p_bits);
+            mpz_nextprime(keyPair.pk.p.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+        }
+        mpz_sub(keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t(), ONE.get_mpz_t());
+        mpz_divexact(keyPair.pk.q.get_mpz_t(), keyPair.pk.q.get_mpz_t(), TWO.get_mpz_t());
+    }
+    
+    mpz_class g_candidate;
+    mpz_class g_power;
     int attempts = 0;
-    
     do {
-        uint64_t a_rand = dist(*randomGen);
-        a = mpz_class(a_rand) % (keyPair.pk.p - TWO) + TWO;
-        mpz_powm(g_candidate.get_mpz_t(), a.get_mpz_t(), TWO.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+        mpz_urandomb(g_candidate.get_mpz_t(), randState, p_bits);
+        g_candidate = modAdd(g_candidate, TWO, keyPair.pk.p);
+        
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         attempts++;
@@ -123,18 +134,15 @@ KeyPair BayerGroth2012::generateKeyPair() {
     
     keyPair.pk.g = g_candidate;
     
-    // Generate secret key sk in [2, q-2]
-    mpz_class sk_range = keyPair.pk.q - TWO;
-    mpz_class sk_candidate;
-    uint64_t sk_rand = dist(*randomGen);
-    sk_candidate = (mpz_class(sk_rand) % sk_range) + TWO;
-    keyPair.sk = sk_candidate;
+    mpz_urandomb(keyPair.sk.get_mpz_t(), randState, q_bits);
+    keyPair.sk = modAdd(keyPair.sk, TWO, keyPair.pk.q);
     
-    // Compute h = g^sk mod p
     mpz_powm(keyPair.pk.h.get_mpz_t(), keyPair.pk.g.get_mpz_t(),
              keyPair.sk.get_mpz_t(), keyPair.pk.p.get_mpz_t());
 
     currentPk = keyPair.pk;
+
+    gmp_randclear(randState);
 
     return keyPair;
 }
