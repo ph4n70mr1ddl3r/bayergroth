@@ -1,0 +1,45 @@
+# Compiled object files
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Executables
+test_bg12
+test
+debug
+debug_bg12
+debug_main
+minimal
+minimal_shuffle
+shuffle_test
+verify_math
+test_gmp
+test_shuffle
+
+# Build directories
+build/
+obj/
+
+# GMP build artifacts
+*.lo
+*.la
+.libs/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+core
