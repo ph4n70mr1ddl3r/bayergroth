@@ -15,6 +15,42 @@ static const mpz_class ZERO(0);
 static const mpz_class ONE(1);
 static const mpz_class TWO(2);
 
+mpz_class BayerGroth2012::getSecureRandom(const mpz_class& limit) {
+    if (limit <= 0) {
+        return ZERO;
+    }
+    
+    size_t limit_bits = mpz_sizeinbase(limit.get_mpz_t(), 2);
+    size_t byte_count = (limit_bits + 7) / 8;
+    if (byte_count < 32) byte_count = 32;
+    
+    std::vector<unsigned char> random_bytes(byte_count);
+    int result = RAND_bytes(random_bytes.data(), byte_count);
+    
+    if (result != 1) {
+        std::vector<unsigned char> fallback(byte_count);
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(fallback.data(), 1, byte_count, f);
+            fclose(f);
+        } else {
+            for (size_t i = 0; i < byte_count; ++i) {
+                fallback[i] = random_bytes[i];
+            }
+        }
+        for (size_t i = 0; i < byte_count; ++i) {
+            random_bytes[i] = fallback[i];
+        }
+    }
+    
+    mpz_class result_mpz = 0;
+    for (size_t i = 0; i < byte_count; ++i) {
+        result_mpz = result_mpz * 256 + random_bytes[i];
+    }
+    
+    return result_mpz % limit;
+}
+
 BayerGroth2012::BayerGroth2012(int securityParameter) : securityParam(securityParameter), randomGen(nullptr), ownsRandomGen(true) {
     randomGen = new std::mt19937_64(
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
@@ -36,19 +72,7 @@ void BayerGroth2012::setRandomGenerator(std::mt19937_64& rng) {
 }
 
 mpz_class BayerGroth2012::getRandomExponent() {
-    mpz_class limit = currentPk.q;
-    mpz_class result;
-    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-
-    uint64_t randVal = dist(*randomGen);
-    result = mpz_class(randVal);
-
-    while (result >= limit) {
-        randVal = dist(*randomGen);
-        result = mpz_class(randVal);
-    }
-
-    return result;
+    return getSecureRandom(currentPk.q);
 }
 
 KeyPair BayerGroth2012::generateKeyPair() {
@@ -116,7 +140,14 @@ KeyPair BayerGroth2012::generateKeyPair() {
 }
 
 Ciphertext BayerGroth2012::encrypt(const PublicKey& pk, const mpz_class& message) {
-    mpz_class r = generateRandom(pk.q, *randomGen);
+    if (pk.q <= 0 || pk.p <= 0) {
+        throw std::invalid_argument("Invalid public key parameters");
+    }
+    if (message < 0 || message >= pk.p) {
+        throw std::invalid_argument("Message must be in range [0, p)");
+    }
+    
+    mpz_class r = getSecureRandom(pk.q);
     
     Ciphertext ct;
     mpz_powm(ct.a.get_mpz_t(), pk.g.get_mpz_t(), r.get_mpz_t(), pk.p.get_mpz_t());
@@ -345,17 +376,26 @@ void BayerGroth2012::computeResponses(
         proof.z4[i] = S_matrix[inv_perm[i]][i];
     }
     
-    // z5[i] = (1 + c) * S[i][i]
-    // z6[i] = (1 + c) * S[i][i]
-    // z7[i] = (1 + c) * S[i][i]
-    // z8[i] = (1 + c) * S[i][i]
+    // z5[i] = (1 + c) * sum_j S[i][j]  (row sum)
+    // z6[i] = (1 + c) * sum_j S[i][j]  (row sum)
+    // z7[i] = (1 + c) * sum_j S[j][i]  (column sum)
+    // z8[i] = (1 + c) * sum_j S[j][i]  (column sum)
     mpz_class one_plus_c = modAdd(ONE, challenge, pk.q);
+    
+    std::vector<mpz_class> row_sum(n, ZERO);
+    std::vector<mpz_class> col_sum(n, ZERO);
     for (size_t i = 0; i < n; ++i) {
-        mpz_class S_ii = S_matrix[i][i];
-        proof.z5[i] = modMul(one_plus_c, S_ii, pk.q);
-        proof.z6[i] = modMul(one_plus_c, S_ii, pk.q);
-        proof.z7[i] = modMul(one_plus_c, S_ii, pk.q);
-        proof.z8[i] = modMul(one_plus_c, S_ii, pk.q);
+        for (size_t j = 0; j < n; ++j) {
+            row_sum[i] = modAdd(row_sum[i], S_matrix[i][j], pk.q);
+            col_sum[j] = modAdd(col_sum[j], S_matrix[i][j], pk.q);
+        }
+    }
+    
+    for (size_t i = 0; i < n; ++i) {
+        proof.z5[i] = modMul(one_plus_c, row_sum[i], pk.q);
+        proof.z6[i] = modMul(one_plus_c, row_sum[i], pk.q);
+        proof.z7[i] = modMul(one_plus_c, col_sum[i], pk.q);
+        proof.z8[i] = modMul(one_plus_c, col_sum[i], pk.q);
     }
     
     // z9 = sum_{i,j} S[i][j]
@@ -497,44 +537,50 @@ bool BayerGroth2012::verifyEquations(
     }
     
     // 2. Verify row commitment equations
-    // For each i: g^{z5[i]} = A[i][i]^{1+c}
-    //            h^{z6[i]} = B[i][i]^{1+c}
+    // For each i: g^{z5[i]} = product_j A[i][j]^{1+c}
+    //            h^{z6[i]} = product_j B[i][j]^{1+c}
     mpz_class one_plus_c = modAdd(ONE, challenge, pk.q);
     for (size_t i = 0; i < n; ++i) {
-        // Compute A[i][i]^{1+c}
-        mpz_class A_ii_c = modExp(proof.A[i][i], one_plus_c, pk.p);
-        mpz_class B_ii_c = modExp(proof.B[i][i], one_plus_c, pk.p);
+        mpz_class prod_A_row = ONE;
+        mpz_class prod_B_row = ONE;
+        for (size_t j = 0; j < n; ++j) {
+            mpz_class A_ij_c = modExp(proof.A[i][j], one_plus_c, pk.p);
+            mpz_class B_ij_c = modExp(proof.B[i][j], one_plus_c, pk.p);
+            prod_A_row = modMul(prod_A_row, A_ij_c, pk.p);
+            prod_B_row = modMul(prod_B_row, B_ij_c, pk.p);
+        }
         
-        // Verify g^{z5[i]} = A[i][i]^{1+c}
         mpz_class g_z5 = modExp(pk.g, proof.z5[i], pk.p);
-        if (g_z5 != A_ii_c) {
+        if (g_z5 != prod_A_row) {
             return false;
         }
         
-        // Verify h^{z6[i]} = B[i][i]^{1+c}
         mpz_class h_z6 = modExp(pk.h, proof.z6[i], pk.p);
-        if (h_z6 != B_ii_c) {
+        if (h_z6 != prod_B_row) {
             return false;
         }
     }
     
     // 3. Verify column commitment equations
-    // For each i: g^{z7[i]} = A[i][i]^{1+c}
-    //            h^{z8[i]} = B[i][i]^{1+c}
+    // For each i: g^{z7[i]} = product_j A[j][i]^{1+c}
+    //            h^{z8[i]} = product_j B[j][i]^{1+c}
     for (size_t i = 0; i < n; ++i) {
-        // Compute A[i][i]^{1+c}
-        mpz_class A_ii_c = modExp(proof.A[i][i], one_plus_c, pk.p);
-        mpz_class B_ii_c = modExp(proof.B[i][i], one_plus_c, pk.p);
+        mpz_class prod_A_col = ONE;
+        mpz_class prod_B_col = ONE;
+        for (size_t j = 0; j < n; ++j) {
+            mpz_class A_ji_c = modExp(proof.A[j][i], one_plus_c, pk.p);
+            mpz_class B_ji_c = modExp(proof.B[j][i], one_plus_c, pk.p);
+            prod_A_col = modMul(prod_A_col, A_ji_c, pk.p);
+            prod_B_col = modMul(prod_B_col, B_ji_c, pk.p);
+        }
         
-        // Verify g^{z7[i]} = A[i][i]^{1+c}
         mpz_class g_z7 = modExp(pk.g, proof.z7[i], pk.p);
-        if (g_z7 != A_ii_c) {
+        if (g_z7 != prod_A_col) {
             return false;
         }
         
-        // Verify h^{z8[i]} = B[i][i]^{1+c}
         mpz_class h_z8 = modExp(pk.h, proof.z8[i], pk.p);
-        if (h_z8 != B_ii_c) {
+        if (h_z8 != prod_B_col) {
             return false;
         }
     }

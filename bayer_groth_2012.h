@@ -4,7 +4,9 @@
 #include <vector>
 #include <string>
 #include <random>
+#include <memory>
 #include <gmpxx.h>
+#include <openssl/rand.h>
 
 namespace BG12 {
 
@@ -88,6 +90,9 @@ public:
     static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
     static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
     static mpz_class generateRandom(const mpz_class& limit, std::mt19937_64& rng);
+
+    // Cryptographically secure random generation
+    static mpz_class getSecureRandom(const mpz_class& limit);
 
 private:
     int securityParam;

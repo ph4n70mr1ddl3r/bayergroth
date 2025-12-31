@@ -6,10 +6,43 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 
 namespace BayerGroth {
 
-BayerGrothShuffle::BayerGrothShuffle(int securityParameter) : securityParam(securityParameter), randomGen(nullptr), ownsRandomGen(false) {
+static const mpz_class ZERO(0);
+static const mpz_class ONE(1);
+
+mpz_class getSecureRandom(const mpz_class& limit) {
+    if (limit <= 0) {
+        return ZERO;
+    }
+    
+    size_t limit_bits = mpz_sizeinbase(limit.get_mpz_t(), 2);
+    size_t byte_count = (limit_bits + 7) / 8;
+    if (byte_count < 32) byte_count = 32;
+    
+    std::vector<unsigned char> random_bytes(byte_count);
+    int result = RAND_bytes(random_bytes.data(), byte_count);
+    
+    if (result != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(random_bytes.data(), 1, byte_count, f);
+            fclose(f);
+        }
+    }
+    
+    mpz_class result_mpz = 0;
+    for (size_t i = 0; i < byte_count; ++i) {
+        result_mpz = result_mpz * 256 + random_bytes[i];
+    }
+    
+    return result_mpz % limit;
+}
+
+BayerGrothShuffle::BayerGrothShuffle(int securityParameter) : securityParam(securityParameter), randomGen(nullptr), ownsRandomGen(false), currentPk() {
     randomGen = new std::mt19937_64(
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
     ownsRandomGen = true;
@@ -43,19 +76,10 @@ mpz_class BayerGrothShuffle::generateRandomNumber(const mpz_class& limit) {
 }
 
 mpz_class BayerGrothShuffle::getRandomExponent() {
-    mpz_class limit = currentPk.q;
-    mpz_class result;
-    std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-
-    uint64_t randVal = dist(*randomGen);
-    result = mpz_class(randVal);
-
-    while (result >= limit) {
-        randVal = dist(*randomGen);
-        result = mpz_class(randVal);
+    if (currentPk.q <= 0) {
+        return ZERO;
     }
-
-    return result;
+    return getSecureRandom(currentPk.q);
 }
 
 KeyPair BayerGrothShuffle::generateKeyPair() {
@@ -114,8 +138,14 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
 }
 
 Ciphertext BayerGrothShuffle::encrypt(const PublicKey& pk, const mpz_class& message) {
-    mpz_class limit = pk.q;
-    mpz_class r = generateRandomNumber(limit);
+    if (pk.q <= 0 || pk.p <= 0) {
+        throw std::invalid_argument("Invalid public key parameters");
+    }
+    if (message < 0 || message >= pk.p) {
+        throw std::invalid_argument("Message must be in range [0, p)");
+    }
+    
+    mpz_class r = getSecureRandom(pk.q);
 
     Ciphertext ct;
     mpz_powm(ct.a.get_mpz_t(), pk.g.get_mpz_t(), r.get_mpz_t(), pk.p.get_mpz_t());
@@ -354,23 +384,33 @@ mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, cons
 }
 
 mpz_class computeHash(const std::vector<Ciphertext>& ciphers, const PublicKey& pk) {
-    std::string hashInput;
-
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len;
+    
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+    
     for (const auto& ct : ciphers) {
-        hashInput += ct.a.get_str();
-        hashInput += ct.b.get_str();
+        std::string a_val = ct.a.get_str();
+        std::string b_val = ct.b.get_str();
+        EVP_DigestUpdate(ctx, a_val.c_str(), a_val.length());
+        EVP_DigestUpdate(ctx, b_val.c_str(), b_val.length());
     }
-
-    mpz_class hashResult;
-    mpz_set_ui(hashResult.get_mpz_t(), 0);
-
-    for (char c : hashInput) {
-        mpz_class charVal = mpz_class((unsigned char)c);
-        hashResult = BayerGrothShuffle::modAdd(hashResult, charVal, pk.p);
-        hashResult = BayerGrothShuffle::modMul(hashResult, mpz_class(256), pk.p);
+    
+    std::string g_val = pk.g.get_str();
+    std::string h_val = pk.h.get_str();
+    EVP_DigestUpdate(ctx, g_val.c_str(), g_val.length());
+    EVP_DigestUpdate(ctx, h_val.c_str(), h_val.length());
+    
+    EVP_DigestFinal_ex(ctx, hash, &hash_len);
+    EVP_MD_CTX_free(ctx);
+    
+    mpz_class challenge = 0;
+    for (unsigned int i = 0; i < hash_len; ++i) {
+        challenge = challenge * 256 + hash[i];
     }
-
-    return hashResult % pk.q;
+    
+    return challenge % pk.q;
 }
 
 std::string ciphertextToString(const Ciphertext& ct) {
