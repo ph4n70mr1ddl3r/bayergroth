@@ -6,7 +6,6 @@
 #include <random>
 #include <gmpxx.h>
 #include <openssl/rand.h>
-#include <array>
 
 namespace BayerGroth {
 
@@ -90,6 +89,7 @@ public:
     static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
 
     static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
+    static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len);
 
 private:
     int securityParam;

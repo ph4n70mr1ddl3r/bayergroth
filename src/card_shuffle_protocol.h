@@ -1,13 +1,14 @@
 #ifndef CARD_SHUFFLE_PROTOCOL_H
 #define CARD_SHUFFLE_PROTOCOL_H
 
-#include "../src/bayer_groth_shuffle.h"
+#include "bayer_groth_shuffle.h"
 #include <vector>
 #include <string>
-#include <map>
 #include <random>
 
 namespace CardShuffle {
+
+constexpr int DECK_SIZE = 52;
 
 enum Suit { HEARTS, DIAMONDS, CLUBS, SPADES };
 
@@ -29,6 +30,8 @@ struct ShuffleRound {
     int playerIndex;
     BayerGroth::ShuffleProof proof;
     std::vector<int> permutation;
+    std::vector<BayerGroth::Ciphertext> inputCards;
+    std::vector<BayerGroth::Ciphertext> outputCards;
 };
 
 struct DeckState {

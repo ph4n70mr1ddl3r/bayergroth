@@ -97,10 +97,11 @@ void TwoPlayerCardShuffle::player1Shuffle() {
         reencryptionRand[i] = shuffler.generateRandomNumber(player1.keyPair.pk.q);
     }
 
+    std::vector<BayerGroth::Ciphertext> inputCards = deckState.encryptedCards;
     BayerGroth::ShuffleProof proof;
     deckState.encryptedCards = shuffler.shuffle(
         player1.keyPair.pk,
-        deckState.encryptedCards,
+        inputCards,
         reencryptionRand,
         permutation,
         proof
@@ -123,10 +124,22 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 
     std::cout << "Verifying " << player1.name << "'s shuffle..." << std::endl;
 
-    BayerGroth::BayerGrothShuffle shuffler(securityParam);
-    shuffler.setRandomGenerator(player1.rng);
+    if (deckState.shuffleHistory.empty()) {
+        std::cout << "ERROR: No shuffle to verify!" << std::endl;
+        return false;
+    }
 
-    if (!shuffler.verify(player1.keyPair.pk, deckState.encryptedCards, deckState.encryptedCards, deckState.shuffleHistory.back().proof)) {
+    BayerGroth::BayerGrothShuffle shuffler(securityParam);
+    shuffler.setRandomGenerator(player2.rng);
+
+    std::vector<BayerGroth::Ciphertext> inputBeforeShuffle;
+    if (deckState.shuffleHistory.size() == 1) {
+        inputBeforeShuffle = deckState.shuffleHistory[0].inputCards;
+    } else {
+        inputBeforeShuffle = deckState.shuffleHistory[deckState.shuffleHistory.size() - 2].outputCards;
+    }
+
+    if (!shuffler.verify(player1.keyPair.pk, inputBeforeShuffle, deckState.encryptedCards, deckState.shuffleHistory.back().proof)) {
         std::cout << "ERROR: Verification failed!" << std::endl;
         return false;
     }
@@ -134,38 +147,33 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 
     std::cout << "\nRe-encrypting cards with " << player2.name << "'s public key..." << std::endl;
 
-    for (auto& ct : deckState.encryptedCards) {
-        BayerGroth::BayerGrothShuffle s2(securityParam);
-        s2.setRandomGenerator(player2.rng);
-        mpz_class r = s2.generateRandomNumber(player2.keyPair.pk.q);
+    std::vector<BayerGroth::Ciphertext> reencryptedCards = deckState.encryptedCards;
+    std::vector<mpz_class> reencryptionRand(deckState.encryptedCards.size());
+    for (size_t i = 0; i < deckState.encryptedCards.size(); ++i) {
+        mpz_class r = shuffler.generateRandomNumber(player2.keyPair.pk.q);
+        reencryptionRand[i] = r;
 
-        mpz_class g_r, h_r;
-        mpz_powm(g_r.get_mpz_t(), player2.keyPair.pk.g.get_mpz_t(), r.get_mpz_t(), player2.keyPair.pk.p.get_mpz_t());
-        mpz_powm(h_r.get_mpz_t(), player2.keyPair.pk.h.get_mpz_t(), r.get_mpz_t(), player2.keyPair.pk.p.get_mpz_t());
+        mpz_class g_r = shuffler.modExp(player2.keyPair.pk.g, r, player2.keyPair.pk.p);
+        mpz_class h_r = shuffler.modExp(player2.keyPair.pk.h, r, player2.keyPair.pk.p);
 
-        mpz_class new_a = ct.a * g_r % player2.keyPair.pk.p;
-        mpz_class new_b = ct.b * h_r % player2.keyPair.pk.p;
-
-        ct.a = new_a;
-        ct.b = new_b;
+        reencryptedCards[i].a = shuffler.modMul(reencryptedCards[i].a, g_r, player2.keyPair.pk.p);
+        reencryptedCards[i].b = shuffler.modMul(reencryptedCards[i].b, h_r, player2.keyPair.pk.p);
     }
 
     std::cout << "Shuffling deck..." << std::endl;
-    size_t n = deckState.encryptedCards.size();
+    size_t n = reencryptedCards.size();
     std::vector<int> permutation = BayerGroth::BayerGrothShuffle::generatePermutation(n, player2.rng);
 
-    std::vector<mpz_class> reencryptionRand(n);
+    std::vector<mpz_class> shuffleRand(n);
     for (size_t i = 0; i < n; ++i) {
-        BayerGroth::BayerGrothShuffle s3(securityParam);
-        s3.setRandomGenerator(player2.rng);
-        reencryptionRand[i] = s3.generateRandomNumber(player2.keyPair.pk.q);
+        shuffleRand[i] = shuffler.generateRandomNumber(player2.keyPair.pk.q);
     }
 
     BayerGroth::ShuffleProof proof;
-    deckState.encryptedCards = shuffler.shuffle(
+    std::vector<BayerGroth::Ciphertext> outputCards = shuffler.shuffle(
         player2.keyPair.pk,
-        deckState.encryptedCards,
-        reencryptionRand,
+        reencryptedCards,
+        shuffleRand,
         permutation,
         proof
     );
@@ -174,7 +182,11 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
     round.playerIndex = 1;
     round.proof = proof;
     round.permutation = permutation;
+    round.inputCards = reencryptedCards;
+    round.outputCards = outputCards;
     deckState.shuffleHistory.push_back(round);
+
+    deckState.encryptedCards = outputCards;
 
     deckState.currentPlayerIndex = 0;
 
@@ -187,11 +199,18 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 bool TwoPlayerCardShuffle::player1Verify() {
     std::cout << "\n=== " << player1.name << "'s Final Verification ===" << std::endl;
 
+    if (deckState.shuffleHistory.empty()) {
+        std::cout << "ERROR: No shuffle to verify!" << std::endl;
+        return false;
+    }
+
     BayerGroth::BayerGrothShuffle shuffler(securityParam);
     shuffler.setRandomGenerator(player2.rng);
 
+    std::vector<BayerGroth::Ciphertext> inputBeforeShuffle = deckState.shuffleHistory[deckState.shuffleHistory.size() - 1].inputCards;
+
     std::cout << "Verifying " << player2.name << "'s shuffle..." << std::endl;
-    if (!shuffler.verify(player2.keyPair.pk, deckState.encryptedCards, deckState.encryptedCards, deckState.shuffleHistory.back().proof)) {
+    if (!shuffler.verify(player2.keyPair.pk, inputBeforeShuffle, deckState.encryptedCards, deckState.shuffleHistory.back().proof)) {
         std::cout << "ERROR: Verification failed!" << std::endl;
         return false;
     }
@@ -204,7 +223,7 @@ bool TwoPlayerCardShuffle::player1Verify() {
 }
 
 bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
-    if (position < 0 || position >= 52) {
+    if (position < 0 || position >= DECK_SIZE) {
         std::cout << "Invalid position!" << std::endl;
         return false;
     }
@@ -243,10 +262,10 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
 
 void TwoPlayerCardShuffle::revealAllCards() {
     std::cout << "\n=== Cooperative Reveal of All Cards ===" << std::endl;
-    std::cout << "Cards will be revealed in order (0-51):" << std::endl;
+    std::cout << "Cards will be revealed in order (0-" << (DECK_SIZE - 1) << "):" << std::endl;
     std::cout << std::string(50, '-') << std::endl;
 
-    for (int i = 0; i < 52; ++i) {
+    for (int i = 0; i < DECK_SIZE; ++i) {
         Card card;
         if (cooperativeReveal(i, card)) {
             std::cout << "Position " << std::setw(2) << i << ": " << card.toString() << std::endl;

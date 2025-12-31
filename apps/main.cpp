@@ -74,11 +74,14 @@ int main() {
         rand1[i] = shuffle.generateRandomNumber(aliceKey.pk.q);
     }
 
+    std::vector<Ciphertext> aliceInputDeck = deck;
     auto shuffle1Start = std::chrono::high_resolution_clock::now();
     ShuffleProof proof1;
-    deck = shuffle.shuffle(aliceKey.pk, deck, rand1, perm1, proof1);
+    std::vector<Ciphertext> aliceOutputDeck = shuffle.shuffle(aliceKey.pk, aliceInputDeck, rand1, perm1, proof1);
     auto shuffle1End = std::chrono::high_resolution_clock::now();
     auto shuffle1Duration = std::chrono::duration_cast<std::chrono::microseconds>(shuffle1End - shuffle1Start);
+
+    deck = aliceOutputDeck;
 
     std::cout << "Alice shuffled the deck" << std::endl;
 
@@ -88,12 +91,15 @@ int main() {
 
     auto reencryptStart = std::chrono::high_resolution_clock::now();
     shuffle.setRandomGenerator(rng2);
+    std::vector<Ciphertext> bobInputDeck = deck;
+    std::vector<mpz_class> reencryptionRand(deck.size());
     for (size_t i = 0; i < deck.size(); ++i) {
         mpz_class r = shuffle.generateRandomNumber(bobKey.pk.q);
+        reencryptionRand[i] = r;
         mpz_class g_r = shuffle.modExp(bobKey.pk.g, r, bobKey.pk.p);
         mpz_class h_r = shuffle.modExp(bobKey.pk.h, r, bobKey.pk.p);
-        deck[i].a = shuffle.modMul(deck[i].a, g_r, bobKey.pk.p);
-        deck[i].b = shuffle.modMul(deck[i].b, h_r, bobKey.pk.p);
+        bobInputDeck[i].a = shuffle.modMul(bobInputDeck[i].a, g_r, bobKey.pk.p);
+        bobInputDeck[i].b = shuffle.modMul(bobInputDeck[i].b, h_r, bobKey.pk.p);
     }
     auto reencryptEnd = std::chrono::high_resolution_clock::now();
     auto reencryptDuration = std::chrono::duration_cast<std::chrono::microseconds>(reencryptEnd - reencryptStart);
@@ -108,9 +114,11 @@ int main() {
 
     auto shuffle2Start = std::chrono::high_resolution_clock::now();
     ShuffleProof proof2;
-    deck = shuffle.shuffle(bobKey.pk, deck, rand2, perm2, proof2);
+    std::vector<Ciphertext> bobOutputDeck = shuffle.shuffle(bobKey.pk, bobInputDeck, rand2, perm2, proof2);
     auto shuffle2End = std::chrono::high_resolution_clock::now();
     auto shuffle2Duration = std::chrono::duration_cast<std::chrono::microseconds>(shuffle2End - shuffle2Start);
+
+    deck = bobOutputDeck;
 
     std::cout << "Bob shuffled the deck" << std::endl;
 
