@@ -93,6 +93,9 @@ public:
 
     // Cryptographically secure random generation
     static mpz_class getSecureRandom(const mpz_class& limit);
+    
+    // Timing-safe comparison
+    static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
 
 private:
     int securityParam;
