@@ -40,22 +40,28 @@ void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, con
     player1.name = player1Name;
     player2.name = player2Name;
 
-    BayerGroth::BayerGrothShuffle shuffler1(securityParam);
-    shuffler1.setRandomGenerator(player1.rng);
-    player1.keyPair = shuffler1.generateKeyPair();
+    shuffler.setRandomGenerator(player1.rng);
+    player1.keyPair = shuffler.generateKeyPair();
 
-    BayerGroth::BayerGrothShuffle shuffler2(securityParam);
-    shuffler2.setRandomGenerator(player2.rng);
-    player2.keyPair = shuffler2.generateKeyPair();
+    shuffler.setRandomGenerator(player2.rng);
+    player2.keyPair = shuffler.generateKeyPair();
 
     std::cout << "\n=== Player Initialization ===" << std::endl;
     std::cout << player1.name << " generated key pair" << std::endl;
     std::cout << player2.name << " generated key pair" << std::endl;
+
+    if (!verifyKeyCompatibility(player1.keyPair.pk, player2.keyPair.pk)) {
+        throw std::runtime_error("Player key incompatibility detected");
+    }
 }
 
 BayerGroth::Ciphertext TwoPlayerCardShuffle::encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng) {
     shuffler.setRandomGenerator(rng);
-    return shuffler.encrypt(pk, mpz_class(card.toInt() + 1));
+    int cardValue = card.toInt() + 1;
+    if (cardValue < 1 || cardValue > 52) {
+        throw std::invalid_argument("Invalid card value for encryption");
+    }
+    return shuffler.encrypt(pk, mpz_class(cardValue));
 }
 
 Card TwoPlayerCardShuffle::decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct) {
@@ -113,6 +119,7 @@ void TwoPlayerCardShuffle::player1Shuffle() {
     round.proof = proof;
     round.permutation = permutation;
     round.inputCards = inputCards;
+    round.outputCards = deckState.encryptedCards;
     deckState.shuffleHistory.push_back(round);
 
     deckState.currentPlayerIndex = 1;
@@ -240,8 +247,35 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     mpz_class share2;
     mpz_powm(share2.get_mpz_t(), ct.a.get_mpz_t(), player2.keyPair.sk.get_mpz_t(), player2.keyPair.pk.p.get_mpz_t());
 
-    std::cout << "Combining shares to reveal card..." << std::endl;
     mpz_class combined_share = share1 * share2 % player1.keyPair.pk.p;
+
+    mpz_class g_check = shuffler.modExp(player1.keyPair.pk.g, player1.keyPair.sk, player1.keyPair.pk.p);
+    mpz_class h_check = shuffler.modExp(player1.keyPair.pk.h, player1.keyPair.sk, player1.keyPair.pk.p);
+    bool p1_correct = shuffler.constantTimeEquals(g_check, player1.keyPair.pk.g) && shuffler.constantTimeEquals(h_check, player1.keyPair.pk.h);
+
+    mpz_class g_check2 = shuffler.modExp(player2.keyPair.pk.g, player2.keyPair.sk, player2.keyPair.pk.p);
+    mpz_class h_check2 = shuffler.modExp(player2.keyPair.pk.h, player2.keyPair.sk, player2.keyPair.pk.p);
+    bool p2_correct = shuffler.constantTimeEquals(g_check2, player2.keyPair.pk.g) && shuffler.constantTimeEquals(h_check2, player2.keyPair.pk.h);
+
+    if (!p1_correct) {
+        std::cout << "ERROR: Player 1's secret key does not match their public key!" << std::endl;
+        return false;
+    }
+    if (!p2_correct) {
+        std::cout << "ERROR: Player 2's secret key does not match their public key!" << std::endl;
+        return false;
+    }
+
+    std::cout << "Verifying share correctness..." << std::endl;
+    mpz_class check1 = shuffler.modExp(share1, player2.keyPair.sk, player1.keyPair.pk.p);
+    mpz_class check2 = shuffler.modExp(ct.a, player1.keyPair.sk * player2.keyPair.sk, player1.keyPair.pk.p);
+    if (!shuffler.constantTimeEquals(check1, check2)) {
+        std::cout << "ERROR: Share verification failed - shares do not match!" << std::endl;
+        return false;
+    }
+    std::cout << "Share verification successful!" << std::endl;
+
+    std::cout << "Combining shares to reveal card..." << std::endl;
 
     mpz_class m_inv;
     mpz_invert(m_inv.get_mpz_t(), combined_share.get_mpz_t(), player1.keyPair.pk.p.get_mpz_t());
@@ -279,6 +313,35 @@ void TwoPlayerCardShuffle::printDeckState() {
     std::cout << "Number of encrypted cards: " << deckState.encryptedCards.size() << std::endl;
     std::cout << "Number of shuffle rounds: " << deckState.shuffleHistory.size() << std::endl;
     std::cout << "Current player: " << (deckState.currentPlayerIndex == 0 ? player1.name : player2.name) << std::endl;
+}
+
+bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof) {
+    shuffler.setRandomGenerator(player1.rng);
+    return shuffler.verify(pk, input, output, proof);
+}
+
+bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2) {
+    if (pk1.p != pk2.p) {
+        std::cout << "ERROR: Players have different prime modulus p" << std::endl;
+        return false;
+    }
+    if (pk1.q != pk2.q) {
+        std::cout << "ERROR: Players have different subgroup order q" << std::endl;
+        return false;
+    }
+    if (pk1.g >= pk1.p || pk2.g >= pk2.p) {
+        std::cout << "ERROR: Generator g is not in the valid range" << std::endl;
+        return false;
+    }
+    mpz_class g1_q, g2_q;
+    mpz_powm(g1_q.get_mpz_t(), pk1.g.get_mpz_t(), pk1.q.get_mpz_t(), pk1.p.get_mpz_t());
+    mpz_powm(g2_q.get_mpz_t(), pk2.g.get_mpz_t(), pk2.q.get_mpz_t(), pk2.p.get_mpz_t());
+    if (g1_q != 1 || g2_q != 1) {
+        std::cout << "ERROR: Generator g does not have order q" << std::endl;
+        return false;
+    }
+    std::cout << "Key compatibility verified: Both players use same p, q, and g" << std::endl;
+    return true;
 }
 
 } // namespace CardShuffle
