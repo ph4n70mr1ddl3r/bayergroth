@@ -299,13 +299,21 @@ void TwoPlayerCardShuffle::revealAllCards() {
     std::cout << "Cards will be revealed in order (0-" << (DECK_SIZE - 1) << "):" << std::endl;
     std::cout << std::string(50, '-') << std::endl;
 
+    int failures = 0;
     for (int i = 0; i < DECK_SIZE; ++i) {
         Card card;
         if (cooperativeReveal(i, card)) {
             std::cout << "Position " << std::setw(2) << i << ": " << card.toString() << std::endl;
+        } else {
+            failures++;
+            std::cout << "Position " << std::setw(2) << i << ": FAILED" << std::endl;
         }
     }
     std::cout << std::string(50, '-') << std::endl;
+
+    if (failures > 0) {
+        std::cout << "WARNING: " << failures << " card(s) could not be revealed" << std::endl;
+    }
 }
 
 void TwoPlayerCardShuffle::printDeckState() {
