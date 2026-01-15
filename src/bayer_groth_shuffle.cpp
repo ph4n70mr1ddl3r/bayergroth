@@ -58,19 +58,15 @@ static void getSecureRandomBytes(unsigned char* buffer, size_t size) {
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     : securityParam(std::max(securityParam_, 256)) {
-    std::vector<unsigned char> seed_bytes(64);
-    getSecureRandomBytes(seed_bytes.data(), 64);
-    uint64_t seed = 0;
-    for (size_t i = 0; i < 8; ++i) {
-        seed = (seed << 8) | seed_bytes[i];
-    }
-    rng.seed(seed);
+    std::vector<unsigned char> seed_bytes(32);
+    getSecureRandomBytes(seed_bytes.data(), 32);
+    std::seed_seq seed_seq(seed_bytes.begin(), seed_bytes.end());
+    rng.seed(seed_seq);
 }
 
 BayerGrothShuffle::~BayerGrothShuffle() noexcept {
-    volatile unsigned char* p = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
-    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
-        p[i] = 0;
+    if (!S_matrix.empty()) {
+        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
     }
 }
 
@@ -503,9 +499,8 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         throw std::invalid_argument("Permutation size must match input size");
     }
 
-    volatile unsigned char* vp = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
-    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
-        vp[i] = 0;
+    if (!S_matrix.empty()) {
+        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
     }
     S_matrix.clear();
 
@@ -567,9 +562,8 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
     proof.t = modExp(pk.g, expected_sum_z1, pk.p);
     proof.u = modExp(pk.h, expected_sum_z1, pk.p);
 
-    volatile unsigned char* vp2 = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
-    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
-        vp2[i] = 0;
+    if (!S_matrix.empty()) {
+        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
     }
     S_matrix.clear();
 
@@ -778,6 +772,9 @@ mpz_class BayerGrothShuffle::modMul(const mpz_class& a, const mpz_class& b, cons
 }
 
 mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod) {
+    if (b == ZERO) {
+        throw std::invalid_argument("Division by zero in modular arithmetic");
+    }
     mpz_class b_inv;
     if (mpz_invert(b_inv.get_mpz_t(), b.get_mpz_t(), mod.get_mpz_t()) == 0) {
         return ZERO;

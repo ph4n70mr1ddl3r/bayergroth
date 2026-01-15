@@ -27,7 +27,7 @@ Card Card::fromInt(int value) {
     return card;
 }
 
-TwoPlayerCardShuffle::TwoPlayerCardShuffle() : shuffler(256), securityParam(256) {
+TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securityParam_), securityParam(securityParam_) {
     std::random_device rd;
     player1.rng.seed(rd());
     player2.rng.seed(rd() + 1);
@@ -250,12 +250,10 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     mpz_class combined_share = share1 * share2 % player1.keyPair.pk.p;
 
     mpz_class g_check = shuffler.modExp(player1.keyPair.pk.g, player1.keyPair.sk, player1.keyPair.pk.p);
-    mpz_class h_check = shuffler.modExp(player1.keyPair.pk.h, player1.keyPair.sk, player1.keyPair.pk.p);
-    bool p1_correct = shuffler.constantTimeEquals(g_check, player1.keyPair.pk.g) && shuffler.constantTimeEquals(h_check, player1.keyPair.pk.h);
+    bool p1_correct = shuffler.constantTimeEquals(g_check, player1.keyPair.pk.h);
 
     mpz_class g_check2 = shuffler.modExp(player2.keyPair.pk.g, player2.keyPair.sk, player2.keyPair.pk.p);
-    mpz_class h_check2 = shuffler.modExp(player2.keyPair.pk.h, player2.keyPair.sk, player2.keyPair.pk.p);
-    bool p2_correct = shuffler.constantTimeEquals(g_check2, player2.keyPair.pk.g) && shuffler.constantTimeEquals(h_check2, player2.keyPair.pk.h);
+    bool p2_correct = shuffler.constantTimeEquals(g_check2, player2.keyPair.pk.h);
 
     if (!p1_correct) {
         std::cout << "ERROR: Player 1's secret key does not match their public key!" << std::endl;

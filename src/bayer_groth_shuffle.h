@@ -18,6 +18,12 @@ struct PublicKey {
 struct KeyPair {
     PublicKey pk;
     mpz_class sk;
+
+    KeyPair() = default;
+    KeyPair(const KeyPair&) = delete;
+    KeyPair& operator=(const KeyPair&) = delete;
+    KeyPair(KeyPair&&) = default;
+    KeyPair& operator=(KeyPair&&) = default;
 };
 
 struct Ciphertext {
@@ -123,8 +129,8 @@ private:
     [[nodiscard]] static bool isSafePrime(const mpz_class& p, const mpz_class& q) noexcept;
 };
 
-size_t estimateProofSize(const ShuffleProof& proof) noexcept;
-size_t estimateCiphertextSize(const Ciphertext& ct) noexcept;
+[[nodiscard]] size_t estimateProofSize(const ShuffleProof& proof) noexcept;
+[[nodiscard]] size_t estimateCiphertextSize(const Ciphertext& ct) noexcept;
 
 } // namespace BayerGroth
 

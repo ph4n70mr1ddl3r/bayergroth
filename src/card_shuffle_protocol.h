@@ -42,7 +42,7 @@ struct DeckState {
 
 class TwoPlayerCardShuffle {
 public:
-    TwoPlayerCardShuffle();
+    explicit TwoPlayerCardShuffle(int securityParam = 256);
     ~TwoPlayerCardShuffle() noexcept;
 
     void initializePlayers(const std::string& player1Name, const std::string& player2Name);
