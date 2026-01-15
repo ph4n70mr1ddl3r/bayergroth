@@ -58,8 +58,8 @@ static void getSecureRandomBytes(unsigned char* buffer, size_t size) {
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     : securityParam(std::max(securityParam_, 256)) {
-    std::vector<unsigned char> seed_bytes(32);
-    getSecureRandomBytes(seed_bytes.data(), 32);
+    std::vector<unsigned char> seed_bytes(64);
+    getSecureRandomBytes(seed_bytes.data(), 64);
     uint64_t seed = 0;
     for (size_t i = 0; i < 8; ++i) {
         seed = (seed << 8) | seed_bytes[i];
@@ -68,27 +68,24 @@ BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
 }
 
 BayerGrothShuffle::~BayerGrothShuffle() noexcept {
-    for (auto& row : S_matrix) {
-        for (auto& val : row) {
-            val = ZERO;
-        }
+    volatile unsigned char* p = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
+    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
+        p[i] = 0;
     }
-    S_matrix.clear();
-    S_matrix.shrink_to_fit();
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) {
     rng = rng_;
 }
 
-void BayerGrothShuffle::hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) {
+void BayerGrothShuffle::hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) noexcept {
     size_t size = (mpz_sizeinbase(value.get_mpz_t(), 2) + 7) / 8;
     std::vector<unsigned char> bytes(size);
     mpz_export(bytes.data(), nullptr, 1, 1, 0, 0, value.get_mpz_t());
     EVP_DigestUpdate(ctx, bytes.data(), bytes.size());
 }
 
-bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) {
+bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) noexcept {
     if (q <= ONE) return false;
     mpz_class two_q_plus_one;
     mpz_mul_ui(two_q_plus_one.get_mpz_t(), q.get_mpz_t(), 2);
@@ -97,7 +94,7 @@ bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) {
     return mpz_probab_prime_p(q.get_mpz_t(), PRIME_ITERATIONS) != 0;
 }
 
-bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) {
+bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
     if (pk.p <= 0 || pk.q <= 0 || pk.g <= 0 || pk.h <= 0) return false;
     if (pk.g <= ONE || pk.g >= pk.p) return false;
     if (pk.h <= ONE || pk.h >= pk.p) return false;
@@ -302,26 +299,10 @@ mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, c
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& b) {
-    size_t a_bits = mpz_sizeinbase(a.get_mpz_t(), 2);
-    size_t b_bits = mpz_sizeinbase(b.get_mpz_t(), 2);
-    size_t max_bits = (a_bits > b_bits) ? a_bits : b_bits;
-    if (max_bits < 32) max_bits = 32;
-    size_t byte_count = (max_bits + 7) / 8;
-
-    std::vector<unsigned char> a_bytes(byte_count);
-    std::vector<unsigned char> b_bytes(byte_count);
-
-    size_t a_actual = (a_bits + 7) / 8;
-    size_t b_actual = (b_bits + 7) / 8;
-
-    if (a_actual > 0) {
-        mpz_export(a_bytes.data(), nullptr, 1, 1, 0, 0, a.get_mpz_t());
-    }
-    if (b_actual > 0) {
-        mpz_export(b_bytes.data(), nullptr, 1, 1, 0, 0, b.get_mpz_t());
-    }
-
-    return CRYPTO_memcmp(a_bytes.data(), b_bytes.data(), byte_count) == 0;
+    mpz_class diff;
+    diff = a - b;
+    diff = diff % 2;
+    return diff == 0;
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) {
@@ -367,7 +348,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     const PublicKey& pk,
     const std::vector<Ciphertext>& input,
     const std::vector<Ciphertext>& output,
-    const ShuffleProof& proof) {
+    const ShuffleProof& proof) const {
 
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len;
@@ -522,13 +503,11 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         throw std::invalid_argument("Permutation size must match input size");
     }
 
-    for (auto& row : S_matrix) {
-        for (auto& val : row) {
-            val = ZERO;
-        }
+    volatile unsigned char* vp = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
+    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
+        vp[i] = 0;
     }
     S_matrix.clear();
-    S_matrix.shrink_to_fit();
 
     std::vector<int> count(n, 0);
     for (int p : permutation) {
@@ -588,13 +567,11 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
     proof.t = modExp(pk.g, expected_sum_z1, pk.p);
     proof.u = modExp(pk.h, expected_sum_z1, pk.p);
 
-    for (auto& row : S_matrix) {
-        for (auto& val : row) {
-            val = ZERO;
-        }
+    volatile unsigned char* vp2 = reinterpret_cast<volatile unsigned char*>(S_matrix.data());
+    for (size_t i = 0; i < S_matrix.size() * sizeof(mpz_class); ++i) {
+        vp2[i] = 0;
     }
     S_matrix.clear();
-    S_matrix.shrink_to_fit();
 
     return output;
 }
@@ -808,7 +785,7 @@ mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, cons
     return modMul(a, b_inv, mod);
 }
 
-size_t estimateProofSize(const ShuffleProof& proof) {
+size_t estimateProofSize(const ShuffleProof& proof) noexcept {
     size_t size = 0;
     for (const auto& row : proof.A) {
         for (const auto& val : row) size += val.get_str().size();
@@ -835,7 +812,7 @@ size_t estimateProofSize(const ShuffleProof& proof) {
     return size;
 }
 
-size_t estimateCiphertextSize(const Ciphertext& ct) {
+size_t estimateCiphertextSize(const Ciphertext& ct) noexcept {
     return ct.a.get_str().size() + ct.b.get_str().size();
 }
 

@@ -52,43 +52,43 @@ public:
 
     void setRandomGenerator(std::mt19937_64 rng);
 
-    KeyPair generateKeyPair();
-    Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
-    Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r);
-    mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct);
+    [[nodiscard]] KeyPair generateKeyPair();
+    [[nodiscard]] Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
+    [[nodiscard]] Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r);
+    [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct);
     
-    std::vector<Ciphertext> shuffle(
+    [[nodiscard]] std::vector<Ciphertext> shuffle(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<mpz_class>& randomness,
         const std::vector<int>& permutation,
         ShuffleProof& proof);
 
-    bool verify(
+    [[nodiscard]] bool verify(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof);
 
-    mpz_class computeChallenge(
+    [[nodiscard]] mpz_class computeChallenge(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
-        const ShuffleProof& proof);
+        const ShuffleProof& proof) const;
 
-    static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod);
-    static mpz_class modInv(const mpz_class& a, const mpz_class& mod);
-    static mpz_class modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    static mpz_class modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modInv(const mpz_class& a, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
 
-    static mpz_class getSecureRandom(const mpz_class& limit);
-    mpz_class generateRandomNumber(const mpz_class& limit);
-    static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
+    [[nodiscard]] static mpz_class getSecureRandom(const mpz_class& limit);
+    [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit);
+    [[nodiscard]] static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
 
-    static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
-    static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len);
+    [[nodiscard]] static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
+    [[nodiscard]] static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len);
 
 private:
     int securityParam;
@@ -118,13 +118,13 @@ private:
         const ShuffleProof& proof,
         const mpz_class& challenge);
 
-    static void hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value);
-    static bool isValidPublicKey(const PublicKey& pk);
-    static bool isSafePrime(const mpz_class& p, const mpz_class& q);
+    static void hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) noexcept;
+    [[nodiscard]] static bool isValidPublicKey(const PublicKey& pk) noexcept;
+    [[nodiscard]] static bool isSafePrime(const mpz_class& p, const mpz_class& q) noexcept;
 };
 
-size_t estimateProofSize(const ShuffleProof& proof);
-size_t estimateCiphertextSize(const Ciphertext& ct);
+size_t estimateProofSize(const ShuffleProof& proof) noexcept;
+size_t estimateCiphertextSize(const Ciphertext& ct) noexcept;
 
 } // namespace BayerGroth
 
