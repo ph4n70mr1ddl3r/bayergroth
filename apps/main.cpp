@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <cstdio>
 
 using namespace BayerGroth;
 
@@ -27,9 +28,25 @@ int main() {
 
     auto totalStart = std::chrono::high_resolution_clock::now();
 
-    std::random_device rd;
-    std::mt19937_64 rng1(rd());
-    std::mt19937_64 rng2(rd());
+    std::vector<unsigned char> seed1(32), seed2(32);
+    if (RAND_bytes(seed1.data(), 32) != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(seed1.data(), 1, 32, f);
+            fclose(f);
+        }
+    }
+    if (RAND_bytes(seed2.data(), 32) != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(seed2.data(), 1, 32, f);
+            fclose(f);
+        }
+    }
+    std::seed_seq seed_seq1(seed1.begin(), seed1.end());
+    std::seed_seq seed_seq2(seed2.begin(), seed2.end());
+    std::mt19937_64 rng1(seed_seq1);
+    std::mt19937_64 rng2(seed_seq2);
 
     BayerGrothShuffle shuffle(256);
 

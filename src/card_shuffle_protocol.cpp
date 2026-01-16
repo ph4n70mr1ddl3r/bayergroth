@@ -4,6 +4,7 @@
 #include <random>
 #include <chrono>
 #include <iomanip>
+#include <cstdio>
 
 namespace CardShuffle {
 
@@ -28,9 +29,25 @@ Card Card::fromInt(int value) {
 }
 
 TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securityParam_), securityParam(securityParam_) {
-    std::random_device rd;
-    player1.rng.seed(rd());
-    player2.rng.seed(rd() + 1);
+    std::vector<unsigned char> seed1(32), seed2(32);
+    if (RAND_bytes(seed1.data(), 32) != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(seed1.data(), 1, 32, f);
+            fclose(f);
+        }
+    }
+    if (RAND_bytes(seed2.data(), 32) != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            fread(seed2.data(), 1, 32, f);
+            fclose(f);
+        }
+    }
+    std::seed_seq seed_seq1(seed1.begin(), seed1.end());
+    std::seed_seq seed_seq2(seed2.begin(), seed2.end());
+    player1.rng.seed(seed_seq1);
+    player2.rng.seed(seed_seq2);
 }
 
 TwoPlayerCardShuffle::~TwoPlayerCardShuffle() noexcept {

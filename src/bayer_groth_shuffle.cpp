@@ -296,9 +296,13 @@ mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, c
 
 bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& b) {
     mpz_class diff;
-    diff = a - b;
-    diff = diff % 2;
-    return diff == 0;
+    mpz_sub(diff.get_mpz_t(), a.get_mpz_t(), b.get_mpz_t());
+
+    mpz_class abs_diff;
+    mpz_abs(abs_diff.get_mpz_t(), diff.get_mpz_t());
+
+    unsigned long is_zero = mpz_cmp_ui(abs_diff.get_mpz_t(), 0);
+    return is_zero == 0;
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) {
@@ -352,6 +356,14 @@ mpz_class BayerGrothShuffle::computeChallenge(
     EvpMdCtx evpCtx;
     EVP_DigestInit_ex(evpCtx.get(), EVP_sha256(), nullptr);
 
+    unsigned char domain_sep = 0x01;
+    EVP_DigestUpdate(evpCtx.get(), &domain_sep, sizeof(domain_sep));
+
+    size_t n = proof.A.size();
+    unsigned char n_bytes[sizeof(size_t)];
+    std::memcpy(n_bytes, &n, sizeof(size_t));
+    EVP_DigestUpdate(evpCtx.get(), n_bytes, sizeof(n_bytes));
+
     hashMpzToDigest(evpCtx.get(), pk.g);
     hashMpzToDigest(evpCtx.get(), pk.h);
     hashMpzToDigest(evpCtx.get(), pk.q);
@@ -375,10 +387,20 @@ mpz_class BayerGrothShuffle::computeChallenge(
         }
     }
 
+    size_t input_size = input.size();
+    unsigned char input_n_bytes[sizeof(size_t)];
+    std::memcpy(input_n_bytes, &input_size, sizeof(size_t));
+    EVP_DigestUpdate(evpCtx.get(), input_n_bytes, sizeof(input_n_bytes));
+
     for (const auto& ct : input) {
         hashMpzToDigest(evpCtx.get(), ct.a);
         hashMpzToDigest(evpCtx.get(), ct.b);
     }
+
+    size_t output_size = output.size();
+    unsigned char output_n_bytes[sizeof(size_t)];
+    std::memcpy(output_n_bytes, &output_size, sizeof(size_t));
+    EVP_DigestUpdate(evpCtx.get(), output_n_bytes, sizeof(output_n_bytes));
 
     for (const auto& ct : output) {
         hashMpzToDigest(evpCtx.get(), ct.a);
