@@ -85,10 +85,8 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
         }
     }
     S_matrix.clear();
-    OPENSSL_cleanse(currentPk.g.get_mpz_t(), sizeof(mpz_t));
-    OPENSSL_cleanse(currentPk.h.get_mpz_t(), sizeof(mpz_t));
-    OPENSSL_cleanse(currentPk.q.get_mpz_t(), sizeof(mpz_t));
-    OPENSSL_cleanse(currentPk.p.get_mpz_t(), sizeof(mpz_t));
+    OPENSSL_cleanse(&currentPk, sizeof(PublicKey));
+    rng = std::mt19937_64();
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) {
@@ -341,10 +339,13 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept {
-    if (a_len != b_len) {
-        return false;
+    size_t len_diff = a_len ^ b_len;
+    unsigned char result = 0;
+    for (size_t i = 0; i < a_len && i < b_len; ++i) {
+        result |= static_cast<unsigned char>(a[i] ^ b[i]);
     }
-    return CRYPTO_memcmp(a, b, a_len) == 0;
+    result |= static_cast<unsigned char>(len_diff);
+    return result == 0;
 }
 
 static bool isValidElement(const mpz_class& val, const mpz_class& mod) {
