@@ -68,7 +68,7 @@ public:
     [[nodiscard]] Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
     [[nodiscard]] Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r);
     [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct);
-    
+
     [[nodiscard]] std::vector<Ciphertext> shuffle(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
@@ -80,7 +80,7 @@ public:
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
-        const ShuffleProof& proof);
+        const ShuffleProof& proof) const;
 
     [[nodiscard]] mpz_class computeChallenge(
         const PublicKey& pk,
@@ -99,8 +99,8 @@ public:
     [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit);
     [[nodiscard]] static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
 
-    [[nodiscard]] static bool constantTimeEquals(const mpz_class& a, const mpz_class& b);
-    [[nodiscard]] static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len);
+    [[nodiscard]] static bool constantTimeEquals(const mpz_class& a, const mpz_class& b) noexcept;
+    [[nodiscard]] static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept;
 
 private:
     int securityParam;
@@ -128,7 +128,7 @@ private:
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
         const ShuffleProof& proof,
-        const mpz_class& challenge);
+        const mpz_class& challenge) const;
 
     static void hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) noexcept;
     [[nodiscard]] static bool isValidPublicKey(const PublicKey& pk) noexcept;

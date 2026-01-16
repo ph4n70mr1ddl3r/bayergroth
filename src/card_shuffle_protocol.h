@@ -59,7 +59,6 @@ private:
     Player player1;
     Player player2;
     DeckState deckState;
-    int securityParam;
 
     BayerGroth::Ciphertext encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng);
     Card decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct);

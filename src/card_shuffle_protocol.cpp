@@ -29,7 +29,7 @@ Card Card::fromInt(int value) {
     return card;
 }
 
-TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securityParam_), securityParam(securityParam_) {
+TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securityParam_) {
     std::vector<unsigned char> seed1 = getRandomBytesFromDevice(32);
     std::vector<unsigned char> seed2 = getRandomBytesFromDevice(32);
     std::seed_seq seed_seq1(seed1.begin(), seed1.end());
