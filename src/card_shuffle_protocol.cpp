@@ -252,7 +252,7 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     mpz_class share2;
     mpz_powm(share2.get_mpz_t(), ct.a.get_mpz_t(), player2.keyPair.sk.get_mpz_t(), player2.keyPair.pk.p.get_mpz_t());
 
-    mpz_class combined_share = share1 * share2 % player1.keyPair.pk.p;
+    mpz_class combined_share = shuffler.modMul(share1, share2, player1.keyPair.pk.p);
 
     mpz_class g_check = shuffler.modExp(player1.keyPair.pk.g, player1.keyPair.sk, player1.keyPair.pk.p);
     bool p1_correct = shuffler.constantTimeEquals(g_check, player1.keyPair.pk.h);

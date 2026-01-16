@@ -8,29 +8,6 @@
 #include <cstddef>
 #include <numeric>
 
-void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
-    int result = RAND_bytes(buffer, size);
-
-    if (result != 1) {
-        FILE* f = fopen("/dev/urandom", "rb");
-        if (f) {
-            size_t read_count = fread(buffer, 1, size, f);
-            fclose(f);
-            if (read_count != size) {
-                throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
-            }
-        } else {
-            throw std::runtime_error("Failed to read from /dev/urandom and OpenSSL RAND_bytes failed");
-        }
-    }
-}
-
-std::vector<unsigned char> getRandomBytesFromDevice(size_t size) {
-    std::vector<unsigned char> buffer(size);
-    getRandomBytesFromDevice(buffer.data(), size);
-    return buffer;
-}
-
 namespace BayerGroth {
 
 struct EvpMdCtx {
@@ -66,14 +43,10 @@ struct GmpRandState {
     GmpRandState& operator=(const GmpRandState&) = delete;
 };
 
-static void getSecureRandomBytes(unsigned char* buffer, size_t size) {
-    getRandomBytesFromDevice(buffer, size);
-}
-
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     : securityParam(std::max(securityParam_, 256)) {
     std::vector<unsigned char> seed_bytes(32);
-    getSecureRandomBytes(seed_bytes.data(), 32);
+    getRandomBytesFromDevice(seed_bytes.data(), 32);
     std::seed_seq seed_seq(seed_bytes.begin(), seed_bytes.end());
     rng.seed(seed_seq);
 }
@@ -134,10 +107,6 @@ bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
     return true;
 }
 
-static std::vector<unsigned char> getRandomBytes(size_t byte_count) {
-    return getRandomBytesFromDevice(byte_count);
-}
-
 mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
     if (limit <= ONE) {
         return ZERO;
@@ -155,7 +124,7 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
     max_valid = max_valid - (max_valid % limit);
 
     for (size_t retry = 0; retry < MAX_RANDOM_RETRY; ++retry) {
-        std::vector<unsigned char> random_bytes = getRandomBytes(byte_count);
+        std::vector<unsigned char> random_bytes = getRandomBytesFromDevice(byte_count);
 
         mpz_class result_mpz = ZERO;
         for (size_t i = 0; i < byte_count; ++i) {
@@ -167,7 +136,7 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
         }
     }
 
-    std::vector<unsigned char> random_bytes = getRandomBytes(byte_count);
+    std::vector<unsigned char> random_bytes = getRandomBytesFromDevice(byte_count);
     mpz_class result_mpz = ZERO;
     for (size_t i = 0; i < byte_count; ++i) {
         result_mpz = result_mpz * 256 + random_bytes[i];
@@ -196,7 +165,7 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
     GmpRandState randState;
 
     std::vector<unsigned char> seed_bytes(64);
-    getSecureRandomBytes(seed_bytes.data(), 64);
+    getRandomBytesFromDevice(seed_bytes.data(), 64);
 
     mpz_class seed_mpz = ZERO;
     for (size_t i = 0; i < 64; ++i) {
@@ -341,8 +310,11 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept {
     size_t len_diff = a_len ^ b_len;
     unsigned char result = 0;
-    for (size_t i = 0; i < a_len && i < b_len; ++i) {
-        result |= static_cast<unsigned char>(a[i] ^ b[i]);
+    size_t max_len = a_len > b_len ? a_len : b_len;
+    for (size_t i = 0; i < max_len; ++i) {
+        unsigned char a_byte = i < a_len ? a[i] : 0;
+        unsigned char b_byte = i < b_len ? b[i] : 0;
+        result |= static_cast<unsigned char>(a_byte ^ b_byte);
     }
     result |= static_cast<unsigned char>(len_diff);
     return result == 0;
