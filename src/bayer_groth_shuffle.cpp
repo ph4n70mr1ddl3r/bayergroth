@@ -1,9 +1,34 @@
 #include "bayer_groth_shuffle.h"
+#include "crypto_utils.h"
 #include <sstream>
 #include <openssl/evp.h>
 #include <openssl/crypto.h>
 #include <cstring>
 #include <ctime>
+#include <cstddef>
+
+void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
+    int result = RAND_bytes(buffer, size);
+
+    if (result != 1) {
+        FILE* f = fopen("/dev/urandom", "rb");
+        if (f) {
+            size_t read_count = fread(buffer, 1, size, f);
+            fclose(f);
+            if (read_count != size) {
+                throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
+            }
+        } else {
+            throw std::runtime_error("Failed to read from /dev/urandom and OpenSSL RAND_bytes failed");
+        }
+    }
+}
+
+std::vector<unsigned char> getRandomBytesFromDevice(size_t size) {
+    std::vector<unsigned char> buffer(size);
+    getRandomBytesFromDevice(buffer.data(), size);
+    return buffer;
+}
 
 namespace BayerGroth {
 
@@ -40,20 +65,7 @@ struct GmpRandState {
 };
 
 static void getSecureRandomBytes(unsigned char* buffer, size_t size) {
-    int result = RAND_bytes(buffer, size);
-
-    if (result != 1) {
-        FILE* f = fopen("/dev/urandom", "rb");
-        if (f) {
-            size_t read_count = fread(buffer, 1, size, f);
-            fclose(f);
-            if (read_count != size) {
-                throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
-            }
-        } else {
-            throw std::runtime_error("Failed to read from /dev/urandom and OpenSSL RAND_bytes failed");
-        }
-    }
+    getRandomBytesFromDevice(buffer, size);
 }
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
@@ -65,9 +77,12 @@ BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
 }
 
 BayerGrothShuffle::~BayerGrothShuffle() noexcept {
-    if (!S_matrix.empty()) {
-        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
+    for (auto& row : S_matrix) {
+        for (auto& val : row) {
+            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
+        }
     }
+    S_matrix.clear();
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) {
@@ -295,14 +310,28 @@ mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, c
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& b) {
-    mpz_class diff;
-    mpz_sub(diff.get_mpz_t(), a.get_mpz_t(), b.get_mpz_t());
+    std::string a_str = a.get_str();
+    std::string b_str = b.get_str();
 
-    mpz_class abs_diff;
-    mpz_abs(abs_diff.get_mpz_t(), diff.get_mpz_t());
+    size_t a_len = a_str.size();
+    size_t b_len = b_str.size();
 
-    unsigned long is_zero = mpz_cmp_ui(abs_diff.get_mpz_t(), 0);
-    return is_zero == 0;
+    unsigned char a_len_bytes[sizeof(size_t)];
+    unsigned char b_len_bytes[sizeof(size_t)];
+    std::memcpy(a_len_bytes, &a_len, sizeof(size_t));
+    std::memcpy(b_len_bytes, &b_len, sizeof(size_t));
+
+    bool len_equal = CRYPTO_memcmp(a_len_bytes, b_len_bytes, sizeof(size_t)) == 0;
+
+    size_t max_len = std::max(a_len, b_len);
+    std::vector<unsigned char> a_padded(max_len + 1, 0);
+    std::vector<unsigned char> b_padded(max_len + 1, 0);
+    std::memcpy(a_padded.data(), a_str.data(), a_len);
+    std::memcpy(b_padded.data(), b_str.data(), b_len);
+
+    bool data_equal = CRYPTO_memcmp(a_padded.data(), b_padded.data(), max_len) == 0;
+
+    return len_equal && data_equal;
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) {
@@ -521,8 +550,10 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         throw std::invalid_argument("Permutation size must match input size");
     }
 
-    if (!S_matrix.empty()) {
-        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
+    for (auto& row : S_matrix) {
+        for (auto& val : row) {
+            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
+        }
     }
     S_matrix.clear();
 
@@ -584,8 +615,10 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
     proof.t = modExp(pk.g, expected_sum_z1, pk.p);
     proof.u = modExp(pk.h, expected_sum_z1, pk.p);
 
-    if (!S_matrix.empty()) {
-        OPENSSL_cleanse(S_matrix.data(), S_matrix.size() * sizeof(mpz_class));
+    for (auto& row : S_matrix) {
+        for (auto& val : row) {
+            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
+        }
     }
     S_matrix.clear();
 

@@ -3,6 +3,7 @@ add_library(bg12_core
     bayer_groth_shuffle.cpp
     card_shuffle_protocol.h
     card_shuffle_protocol.cpp
+    crypto_utils.h
 )
 
 target_include_directories(bg12_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

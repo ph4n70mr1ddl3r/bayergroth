@@ -49,6 +49,12 @@ struct ShuffleProof {
     mpz_class t;
     mpz_class u;
     mpz_class d;
+
+    ShuffleProof() = default;
+    ShuffleProof(const ShuffleProof&) = default;
+    ShuffleProof& operator=(const ShuffleProof&) = default;
+    ShuffleProof(ShuffleProof&&) = default;
+    ShuffleProof& operator=(ShuffleProof&&) = default;
 };
 
 class BayerGrothShuffle {

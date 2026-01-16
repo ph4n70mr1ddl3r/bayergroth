@@ -1,4 +1,5 @@
 #include "../src/bayer_groth_shuffle.h"
+#include "../src/crypto_utils.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -28,21 +29,8 @@ int main() {
 
     auto totalStart = std::chrono::high_resolution_clock::now();
 
-    std::vector<unsigned char> seed1(32), seed2(32);
-    if (RAND_bytes(seed1.data(), 32) != 1) {
-        FILE* f = fopen("/dev/urandom", "rb");
-        if (f) {
-            fread(seed1.data(), 1, 32, f);
-            fclose(f);
-        }
-    }
-    if (RAND_bytes(seed2.data(), 32) != 1) {
-        FILE* f = fopen("/dev/urandom", "rb");
-        if (f) {
-            fread(seed2.data(), 1, 32, f);
-            fclose(f);
-        }
-    }
+    std::vector<unsigned char> seed1 = getRandomBytesFromDevice(32);
+    std::vector<unsigned char> seed2 = getRandomBytesFromDevice(32);
     std::seed_seq seed_seq1(seed1.begin(), seed1.end());
     std::seed_seq seed_seq2(seed2.begin(), seed2.end());
     std::mt19937_64 rng1(seed_seq1);
