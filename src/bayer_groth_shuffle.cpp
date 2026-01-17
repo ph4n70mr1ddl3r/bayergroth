@@ -11,7 +11,8 @@
 namespace BayerGroth {
 
 static void secureClearMpz(mpz_class& val) noexcept {
-    mpz_set_ui(val.get_mpz_t(), 0);
+    mpz_clear(val.get_mpz_t());
+    mpz_init(val.get_mpz_t());
 }
 
 struct EvpMdCtx {
@@ -317,12 +318,7 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     mpz_export(a_padded.data(), nullptr, 1, 1, 0, 0, a.get_mpz_t());
     mpz_export(b_padded.data(), nullptr, 1, 1, 0, 0, b.get_mpz_t());
 
-    unsigned char result = 0;
-    for (size_t i = 0; i < max_bytes; ++i) {
-        result |= static_cast<unsigned char>(a_padded[i] ^ b_padded[i]);
-    }
-
-    return result == 0;
+    return CRYPTO_memcmp(a_padded.data(), b_padded.data(), max_bytes) == 0;
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept {

@@ -4,7 +4,7 @@
 #include <vector>
 #include <random>
 #include <gmpxx.h>
-#include <openssl/rand.h>
+#include <openssl/evp.h>
 
 namespace BayerGroth {
 
@@ -60,7 +60,7 @@ struct ShuffleProof {
 class BayerGrothShuffle {
 public:
     explicit BayerGrothShuffle(int securityParam = 256);
-    ~BayerGrothShuffle() noexcept;
+    ~BayerGrothShuffle();
 
     void setRandomGenerator(std::mt19937_64 rng);
 
@@ -108,7 +108,7 @@ private:
     std::mt19937_64 rng;
     std::vector<std::vector<mpz_class>> S_matrix;
 
-    mpz_class getRandomExponent();
+    [[nodiscard]] mpz_class getRandomExponent();
 
     void generateCommitments(
         const PublicKey& pk,
@@ -123,7 +123,7 @@ private:
         const mpz_class& challenge,
         ShuffleProof& proof);
 
-    bool verifyEquations(
+    [[nodiscard]] bool verifyEquations(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
