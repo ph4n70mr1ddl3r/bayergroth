@@ -1,6 +1,5 @@
 #include "crypto_utils.h"
 #include <stdexcept>
-#include <cstdio>
 #include <openssl/rand.h>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {

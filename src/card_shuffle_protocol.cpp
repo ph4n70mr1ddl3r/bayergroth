@@ -23,6 +23,9 @@ int Card::toInt() const noexcept {
 }
 
 Card Card::fromInt(int value) {
+    if (value < 0 || value >= DECK_SIZE) {
+        throw std::invalid_argument("Card value out of range");
+    }
     Card card;
     card.suit = static_cast<Suit>(value / 13);
     card.rank = value % 13;
@@ -332,27 +335,38 @@ bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const 
 }
 
 bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2) {
-    if (pk1.p != pk2.p) {
-        std::cout << "ERROR: Players have different prime modulus p" << std::endl;
-        return false;
-    }
-    if (pk1.q != pk2.q) {
-        std::cout << "ERROR: Players have different subgroup order q" << std::endl;
-        return false;
-    }
-    if (pk1.g >= pk1.p || pk2.g >= pk2.p) {
+    bool p_match = (pk1.p == pk2.p);
+    bool q_match = (pk1.q == pk2.q);
+    bool g1_valid = (pk1.g >= mpz_class(1) && pk1.g < pk1.p);
+    bool g2_valid = (pk2.g >= mpz_class(1) && pk2.g < pk2.p);
+
+    if (!g1_valid || !g2_valid) {
         std::cout << "ERROR: Generator g is not in the valid range" << std::endl;
         return false;
     }
+
     mpz_class g1_q, g2_q;
     mpz_powm(g1_q.get_mpz_t(), pk1.g.get_mpz_t(), pk1.q.get_mpz_t(), pk1.p.get_mpz_t());
     mpz_powm(g2_q.get_mpz_t(), pk2.g.get_mpz_t(), pk2.q.get_mpz_t(), pk2.p.get_mpz_t());
-    if (g1_q != 1 || g2_q != 1) {
-        std::cout << "ERROR: Generator g does not have order q" << std::endl;
-        return false;
+    bool g1_order = (g1_q == mpz_class(1));
+    bool g2_order = (g2_q == mpz_class(1));
+
+    bool compatible = p_match && q_match && g1_order && g2_order;
+
+    if (!p_match) {
+        std::cout << "ERROR: Players have different prime modulus p" << std::endl;
     }
-    std::cout << "Key compatibility verified: Both players use same p, q, and g" << std::endl;
-    return true;
+    if (!q_match) {
+        std::cout << "ERROR: Players have different subgroup order q" << std::endl;
+    }
+    if (!g1_order || !g2_order) {
+        std::cout << "ERROR: Generator g does not have order q" << std::endl;
+    }
+
+    if (compatible) {
+        std::cout << "Key compatibility verified: Both players use same p, q, and g" << std::endl;
+    }
+    return compatible;
 }
 
 } // namespace CardShuffle

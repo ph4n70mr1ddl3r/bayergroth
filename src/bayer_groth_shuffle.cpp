@@ -320,7 +320,7 @@ bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len,
     return result == 0;
 }
 
-static bool isValidElement(const mpz_class& val, const mpz_class& mod) {
+static bool isValidElement(const mpz_class& val, const mpz_class& mod) noexcept {
     return val >= ONE && val < mod;
 }
 
