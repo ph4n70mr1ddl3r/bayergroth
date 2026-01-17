@@ -12,4 +12,6 @@ set_target_properties(bg12_test PROPERTIES
     OUTPUT_NAME "bg12_test"
 )
 
+add_test(NAME bg12_test COMMAND bg12_test)
+
 install(TARGETS bg12_test RUNTIME DESTINATION bin)

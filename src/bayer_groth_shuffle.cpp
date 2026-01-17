@@ -10,6 +10,10 @@
 
 namespace BayerGroth {
 
+static void secureClearMpz(mpz_class& val) noexcept {
+    mpz_set_ui(val.get_mpz_t(), 0);
+}
+
 struct EvpMdCtx {
     EVP_MD_CTX* ctx;
     EvpMdCtx() : ctx(EVP_MD_CTX_new()) {
@@ -49,17 +53,21 @@ BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     getRandomBytesFromDevice(seed_bytes.data(), 32);
     std::seed_seq seed_seq(seed_bytes.begin(), seed_bytes.end());
     rng.seed(seed_seq);
+    secureClearBytes(seed_bytes.data(), 32);
 }
 
 BayerGrothShuffle::~BayerGrothShuffle() noexcept {
     for (auto& row : S_matrix) {
         for (auto& val : row) {
-            val = 0;
+            secureClearMpz(val);
         }
     }
     S_matrix.clear();
     S_matrix.shrink_to_fit();
-    currentPk = PublicKey{};
+    secureClearMpz(currentPk.g);
+    secureClearMpz(currentPk.h);
+    secureClearMpz(currentPk.q);
+    secureClearMpz(currentPk.p);
     rng = std::mt19937_64();
 }
 
@@ -121,8 +129,14 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
     mpz_class max_valid = 0;
     for (size_t i = 0; i < byte_count; ++i) {
         max_valid = max_valid * 256;
+        if (max_valid >= limit) {
+            max_valid = limit - 1;
+            break;
+        }
     }
-    max_valid = max_valid - (max_valid % limit);
+    if (max_valid == 0) {
+        max_valid = limit_minus_one;
+    }
 
     for (size_t retry = 0; retry < MAX_RANDOM_RETRY; ++retry) {
         std::vector<unsigned char> random_bytes = getRandomBytesFromDevice(byte_count);
@@ -132,9 +146,11 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
             result_mpz = result_mpz * 256 + random_bytes[i];
         }
 
-        if (result_mpz < max_valid) {
+        if (result_mpz <= max_valid) {
+            secureClearBytes(random_bytes.data(), byte_count);
             return result_mpz % limit;
         }
+        secureClearBytes(random_bytes.data(), byte_count);
     }
 
     std::vector<unsigned char> random_bytes = getRandomBytesFromDevice(byte_count);
@@ -142,6 +158,7 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
     for (size_t i = 0; i < byte_count; ++i) {
         result_mpz = result_mpz * 256 + random_bytes[i];
     }
+    secureClearBytes(random_bytes.data(), byte_count);
     return result_mpz % limit;
 }
 
@@ -173,6 +190,7 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         seed_mpz = seed_mpz * 256 + seed_bytes[i];
     }
     gmp_randseed(randState.state, seed_mpz.get_mpz_t());
+    secureClearBytes(seed_bytes.data(), 64);
 
     size_t p_bits = securityParam;
     size_t q_bits = p_bits - 1;
@@ -299,10 +317,7 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     mpz_export(a_padded.data(), nullptr, 1, 1, 0, 0, a.get_mpz_t());
     mpz_export(b_padded.data(), nullptr, 1, 1, 0, 0, b.get_mpz_t());
 
-    unsigned char len_diff = static_cast<unsigned char>(a_bytes != b_bytes);
     unsigned char result = 0;
-    result |= len_diff;
-
     for (size_t i = 0; i < max_bytes; ++i) {
         result |= static_cast<unsigned char>(a_padded[i] ^ b_padded[i]);
     }
@@ -592,7 +607,7 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
 
     for (auto& row : S_matrix) {
         for (auto& val : row) {
-            val = 0;
+            secureClearMpz(val);
         }
     }
     S_matrix.clear();
@@ -779,7 +794,9 @@ mpz_class BayerGrothShuffle::modExp(const mpz_class& base, const mpz_class& exp,
 
 mpz_class BayerGrothShuffle::modInv(const mpz_class& a, const mpz_class& mod) {
     mpz_class result;
-    mpz_invert(result.get_mpz_t(), a.get_mpz_t(), mod.get_mpz_t());
+    if (mpz_invert(result.get_mpz_t(), a.get_mpz_t(), mod.get_mpz_t()) == 0) {
+        throw std::runtime_error("Modular inverse does not exist");
+    }
     return result;
 }
 
@@ -809,7 +826,7 @@ mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, cons
     }
     mpz_class b_inv;
     if (mpz_invert(b_inv.get_mpz_t(), b.get_mpz_t(), mod.get_mpz_t()) == 0) {
-        return ZERO;
+        throw std::runtime_error("Modular inverse does not exist");
     }
     return modMul(a, b_inv, mod);
 }

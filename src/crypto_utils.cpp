@@ -1,6 +1,7 @@
 #include "crypto_utils.h"
 #include <stdexcept>
 #include <openssl/rand.h>
+#include <openssl/crypto.h>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
     int result = RAND_bytes(buffer, size);
@@ -23,4 +24,8 @@ std::vector<unsigned char> getRandomBytesFromDevice(size_t size) {
     std::vector<unsigned char> buffer(size);
     getRandomBytesFromDevice(buffer.data(), size);
     return buffer;
+}
+
+void secureClearBytes(unsigned char* buffer, size_t size) {
+    OPENSSL_cleanse(buffer, size);
 }
