@@ -24,7 +24,7 @@ int Card::toInt() const noexcept {
 
 Card Card::fromInt(int value) {
     if (value < 0 || value >= DECK_SIZE) {
-        throw std::invalid_argument("Card value out of range");
+        throw std::invalid_argument("Card value out of range: " + std::to_string(value));
     }
     Card card;
     card.suit = static_cast<Suit>(value / 13);
@@ -76,8 +76,15 @@ Card TwoPlayerCardShuffle::decryptCard(const BayerGroth::KeyPair& keyPair, const
     mpz_class m;
     mpz_powm(m.get_mpz_t(), ct.a.get_mpz_t(), keyPair.sk.get_mpz_t(), keyPair.pk.p.get_mpz_t());
     mpz_class m_inv;
-    mpz_invert(m_inv.get_mpz_t(), m.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+    if (mpz_invert(m_inv.get_mpz_t(), m.get_mpz_t(), keyPair.pk.p.get_mpz_t()) == 0) {
+        throw std::runtime_error("Failed to compute modular inverse during decryption");
+    }
     mpz_class plaintext = BayerGroth::BayerGrothShuffle::modMul(ct.b, m_inv, keyPair.pk.p);
+
+    if (plaintext < mpz_class(1) || plaintext > mpz_class(DECK_SIZE)) {
+        throw std::runtime_error("Decrypted value out of valid card range: " + plaintext.get_str());
+    }
+
     int value = static_cast<int>(plaintext.get_si()) - 1;
     return Card::fromInt(value);
 }
@@ -105,7 +112,7 @@ void TwoPlayerCardShuffle::player1Shuffle() {
     shuffler.setRandomGenerator(player1.rng);
 
     size_t n = deckState.encryptedCards.size();
-    std::vector<int> permutation = BayerGroth::BayerGrothShuffle::generatePermutation(n, player1.rng);
+    std::vector<size_t> permutation = BayerGroth::BayerGrothShuffle::generatePermutation(n, player1.rng);
 
     std::vector<mpz_class> reencryptionRand(n);
     for (size_t i = 0; i < n; ++i) {
@@ -178,7 +185,7 @@ bool TwoPlayerCardShuffle::player2VerifyAndShuffle() {
 
     std::cout << "Shuffling deck..." << std::endl;
     size_t n = reencryptedCards.size();
-    std::vector<int> permutation = BayerGroth::BayerGrothShuffle::generatePermutation(n, player2.rng);
+    std::vector<size_t> permutation = BayerGroth::BayerGrothShuffle::generatePermutation(n, player2.rng);
 
     std::vector<mpz_class> shuffleRand(n);
     for (size_t i = 0; i < n; ++i) {
@@ -284,7 +291,10 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     std::cout << "Combining shares to reveal card..." << std::endl;
 
     mpz_class m_inv;
-    mpz_invert(m_inv.get_mpz_t(), combined_share.get_mpz_t(), player1.keyPair.pk.p.get_mpz_t());
+    if (mpz_invert(m_inv.get_mpz_t(), combined_share.get_mpz_t(), player1.keyPair.pk.p.get_mpz_t()) == 0) {
+        std::cout << "ERROR: Failed to compute modular inverse!" << std::endl;
+        return false;
+    }
 
     mpz_class plaintext = ct.b * m_inv % player1.keyPair.pk.p;
     int value = static_cast<int>(plaintext.get_si()) - 1;
@@ -335,23 +345,26 @@ bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const 
 }
 
 bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2) {
-    bool p_match = (pk1.p == pk2.p);
-    bool q_match = (pk1.q == pk2.q);
-    bool g1_valid = (pk1.g >= mpz_class(1) && pk1.g < pk1.p);
-    bool g2_valid = (pk2.g >= mpz_class(1) && pk2.g < pk2.p);
+    bool p_match = shuffler.constantTimeEquals(pk1.p, pk2.p);
+    bool q_match = shuffler.constantTimeEquals(pk1.q, pk2.q);
 
-    if (!g1_valid || !g2_valid) {
-        std::cout << "ERROR: Generator g is not in the valid range" << std::endl;
-        return false;
-    }
+    bool g1_in_range = pk1.g >= mpz_class(1) && pk1.g < pk1.p;
+    bool g2_in_range = pk2.g >= mpz_class(1) && pk2.g < pk2.p;
 
     mpz_class g1_q, g2_q;
     mpz_powm(g1_q.get_mpz_t(), pk1.g.get_mpz_t(), pk1.q.get_mpz_t(), pk1.p.get_mpz_t());
     mpz_powm(g2_q.get_mpz_t(), pk2.g.get_mpz_t(), pk2.q.get_mpz_t(), pk2.p.get_mpz_t());
-    bool g1_order = (g1_q == mpz_class(1));
-    bool g2_order = (g2_q == mpz_class(1));
+    bool g1_order = shuffler.constantTimeEquals(g1_q, mpz_class(1));
+    bool g2_order = shuffler.constantTimeEquals(g2_q, mpz_class(1));
 
-    bool compatible = p_match && q_match && g1_order && g2_order;
+    bool g1_valid = shuffler.constantTimeEquals(g1_in_range ? mpz_class(1) : mpz_class(0), mpz_class(1));
+    bool g2_valid = shuffler.constantTimeEquals(g2_in_range ? mpz_class(1) : mpz_class(0), mpz_class(1));
+
+    bool compatible = shuffler.constantTimeEquals(p_match ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
+                      shuffler.constantTimeEquals(q_match ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
+                      shuffler.constantTimeEquals(g1_order ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
+                      shuffler.constantTimeEquals(g2_order ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
+                      g1_valid && g2_valid;
 
     if (!p_match) {
         std::cout << "ERROR: Players have different prime modulus p" << std::endl;
@@ -361,6 +374,9 @@ bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& p
     }
     if (!g1_order || !g2_order) {
         std::cout << "ERROR: Generator g does not have order q" << std::endl;
+    }
+    if (!g1_in_range || !g2_in_range) {
+        std::cout << "ERROR: Generator g is not in the valid range" << std::endl;
     }
 
     if (compatible) {

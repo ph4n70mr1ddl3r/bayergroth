@@ -39,7 +39,7 @@ int main() {
     std::cout << "    Ciphertext size: " << ctSize << " bytes each" << std::endl;
 
     std::cout << "\n[3] Generate permutation" << std::endl;
-    std::vector<int> perm = BayerGrothShuffle::generatePermutation(input.size(), rng);
+    std::vector<size_t> perm = BayerGrothShuffle::generatePermutation(input.size(), rng);
     std::cout << "    Permutation: ";
     for (size_t i = 0; i < perm.size(); ++i) {
         std::cout << perm[i] << " ";

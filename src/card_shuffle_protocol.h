@@ -29,7 +29,7 @@ struct Player {
 struct ShuffleRound {
     int playerIndex;
     BayerGroth::ShuffleProof proof;
-    std::vector<int> permutation;
+    std::vector<size_t> permutation;
     std::vector<BayerGroth::Ciphertext> inputCards;
     std::vector<BayerGroth::Ciphertext> outputCards;
 };

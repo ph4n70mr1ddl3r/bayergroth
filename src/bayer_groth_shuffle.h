@@ -35,7 +35,7 @@ struct ShuffleProof {
     std::vector<std::vector<mpz_class>> A;
     std::vector<std::vector<mpz_class>> B;
     std::vector<std::vector<mpz_class>> D;
-    std::vector<int> permutation;
+    std::vector<size_t> permutation;
     std::vector<mpz_class> z1;
     std::vector<mpz_class> z2;
     std::vector<mpz_class> z3;
@@ -73,7 +73,7 @@ public:
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<mpz_class>& randomness,
-        const std::vector<int>& permutation,
+        const std::vector<size_t>& permutation,
         ShuffleProof& proof);
 
     [[nodiscard]] bool verify(
@@ -97,7 +97,7 @@ public:
 
     [[nodiscard]] static mpz_class getSecureRandom(const mpz_class& limit);
     [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit);
-    [[nodiscard]] static std::vector<int> generatePermutation(size_t n, std::mt19937_64& rng);
+    [[nodiscard]] static std::vector<size_t> generatePermutation(size_t n, std::mt19937_64& rng);
 
     [[nodiscard]] static bool constantTimeEquals(const mpz_class& a, const mpz_class& b) noexcept;
     [[nodiscard]] static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept;
@@ -109,17 +109,17 @@ private:
     std::vector<std::vector<mpz_class>> S_matrix;
 
     mpz_class getRandomExponent();
-    
+
     void generateCommitments(
         const PublicKey& pk,
-        const std::vector<int>& permutation,
+        const std::vector<size_t>& permutation,
         ShuffleProof& proof);
 
     void computeResponses(
         const PublicKey& pk,
         const std::vector<mpz_class>& inputRand,
         const std::vector<mpz_class>& outputRand,
-        const std::vector<int>& permutation,
+        const std::vector<size_t>& permutation,
         const mpz_class& challenge,
         ShuffleProof& proof);
 

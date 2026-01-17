@@ -58,6 +58,7 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
         }
     }
     S_matrix.clear();
+    S_matrix.shrink_to_fit();
     currentPk = PublicKey{};
     rng = std::mt19937_64();
 }
@@ -152,8 +153,8 @@ mpz_class BayerGrothShuffle::getRandomExponent() {
     return getSecureRandom(currentPk.q);
 }
 
-std::vector<int> BayerGrothShuffle::generatePermutation(size_t n, std::mt19937_64& rng) {
-    std::vector<int> perm(n);
+std::vector<size_t> BayerGrothShuffle::generatePermutation(size_t n, std::mt19937_64& rng) {
+    std::vector<size_t> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
     std::shuffle(perm.begin(), perm.end(), rng);
     return perm;
@@ -275,7 +276,9 @@ mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, c
     mpz_class a_sk;
     mpz_powm(a_sk.get_mpz_t(), ct.a.get_mpz_t(), sk.get_mpz_t(), pk.p.get_mpz_t());
     mpz_class a_sk_inv;
-    mpz_invert(a_sk_inv.get_mpz_t(), a_sk.get_mpz_t(), pk.p.get_mpz_t());
+    if (mpz_invert(a_sk_inv.get_mpz_t(), a_sk.get_mpz_t(), pk.p.get_mpz_t()) == 0) {
+        throw std::runtime_error("Modular inverse does not exist");
+    }
     mpz_class message = modMul(ct.b, a_sk_inv, pk.p);
     return message;
 }
@@ -326,7 +329,7 @@ static bool isValidElement(const mpz_class& val, const mpz_class& mod) noexcept 
 
 void BayerGrothShuffle::generateCommitments(
     const PublicKey& pk,
-    const std::vector<int>& permutation,
+    const std::vector<size_t>& permutation,
     ShuffleProof& proof) {
 
     size_t n = permutation.size();
@@ -429,7 +432,7 @@ void BayerGrothShuffle::computeResponses(
     const PublicKey& pk,
     const std::vector<mpz_class>& inputRand,
     const std::vector<mpz_class>& outputRand,
-    const std::vector<int>& permutation,
+    const std::vector<size_t>& permutation,
     const mpz_class& challenge,
     ShuffleProof& proof) {
 
@@ -509,7 +512,7 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
     const PublicKey& pk,
     const std::vector<Ciphertext>& input,
     const std::vector<mpz_class>& randomness,
-    const std::vector<int>& permutation,
+    const std::vector<size_t>& permutation,
     ShuffleProof& proof) {
 
     if (!isValidPublicKey(pk)) {
@@ -529,9 +532,9 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         throw std::invalid_argument("Permutation size must match input size");
     }
 
-    std::vector<int> count(n, 0);
-    for (int p : permutation) {
-        if (p < 0 || p >= static_cast<int>(n)) {
+    std::vector<size_t> count(n, 0);
+    for (size_t p : permutation) {
+        if (p >= n) {
             throw std::invalid_argument("Invalid permutation value");
         }
         count[p]++;
@@ -593,6 +596,7 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         }
     }
     S_matrix.clear();
+    S_matrix.shrink_to_fit();
 
     return output;
 }

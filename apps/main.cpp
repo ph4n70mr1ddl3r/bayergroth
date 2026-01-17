@@ -73,7 +73,7 @@ int main() {
     std::cout << "\n=== Alice's Shuffle ===" << std::endl;
 
     size_t n = deck.size();
-    std::vector<int> perm1 = BayerGrothShuffle::generatePermutation(n, rng1);
+    std::vector<size_t> perm1 = BayerGrothShuffle::generatePermutation(n, rng1);
 
     std::vector<mpz_class> rand1(n);
     for (size_t i = 0; i < n; ++i) {
@@ -111,7 +111,7 @@ int main() {
     auto reencryptDuration = std::chrono::duration_cast<std::chrono::microseconds>(reencryptEnd - reencryptStart);
 
     std::cout << "Shuffling deck..." << std::endl;
-    std::vector<int> perm2 = BayerGrothShuffle::generatePermutation(n, rng2);
+    std::vector<size_t> perm2 = BayerGrothShuffle::generatePermutation(n, rng2);
 
     std::vector<mpz_class> rand2(n);
     for (size_t i = 0; i < n; ++i) {
