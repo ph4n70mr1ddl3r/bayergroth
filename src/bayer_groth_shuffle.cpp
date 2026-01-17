@@ -54,11 +54,11 @@ BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
 BayerGrothShuffle::~BayerGrothShuffle() noexcept {
     for (auto& row : S_matrix) {
         for (auto& val : row) {
-            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
+            val = 0;
         }
     }
     S_matrix.clear();
-    OPENSSL_cleanse(&currentPk, sizeof(PublicKey));
+    currentPk = PublicKey{};
     rng = std::mt19937_64();
 }
 
@@ -529,13 +529,6 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         throw std::invalid_argument("Permutation size must match input size");
     }
 
-    for (auto& row : S_matrix) {
-        for (auto& val : row) {
-            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
-        }
-    }
-    S_matrix.clear();
-
     std::vector<int> count(n, 0);
     for (int p : permutation) {
         if (p < 0 || p >= static_cast<int>(n)) {
@@ -596,7 +589,7 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
 
     for (auto& row : S_matrix) {
         for (auto& val : row) {
-            OPENSSL_cleanse(val.get_mpz_t(), sizeof(mpz_t));
+            val = 0;
         }
     }
     S_matrix.clear();
