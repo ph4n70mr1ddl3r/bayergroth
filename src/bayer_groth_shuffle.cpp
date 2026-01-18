@@ -36,6 +36,14 @@ static constexpr int PRIME_ITERATIONS = 100;
 static constexpr size_t MAX_RANDOM_RETRY = 100;
 static constexpr size_t MIN_SECURE_BYTES = 32;
 
+static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
+    unsigned char bytes[sizeof(size_t)];
+    for (size_t i = 0; i < sizeof(size_t); ++i) {
+        bytes[sizeof(size_t) - 1 - i] = static_cast<unsigned char>((value >> (i * 8)) & 0xFF);
+    }
+    EVP_DigestUpdate(ctx, bytes, sizeof(bytes));
+}
+
 struct GmpRandState {
     gmp_randstate_t state;
     GmpRandState() {
@@ -362,6 +370,8 @@ void BayerGrothShuffle::generateCommitments(
             mpz_class d_ij = modExp(pk.g, alpha_ij, pk.p);
             d_ij = modMul(d_ij, modExp(pk.h, beta_ij, pk.p), pk.p);
             proof.D[i][j] = d_ij;
+            secureClearMpz(alpha_ij);
+            secureClearMpz(beta_ij);
         }
     }
 }
@@ -382,9 +392,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     EVP_DigestUpdate(evpCtx.get(), &domain_sep, sizeof(domain_sep));
 
     size_t n = proof.A.size();
-    unsigned char n_bytes[sizeof(size_t)];
-    std::memcpy(n_bytes, &n, sizeof(size_t));
-    EVP_DigestUpdate(evpCtx.get(), n_bytes, sizeof(n_bytes));
+    digestSizeT(evpCtx.get(), n);
 
     hashMpzToDigest(evpCtx.get(), pk.g);
     hashMpzToDigest(evpCtx.get(), pk.h);
@@ -410,9 +418,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     }
 
     size_t input_size = input.size();
-    unsigned char input_n_bytes[sizeof(size_t)];
-    std::memcpy(input_n_bytes, &input_size, sizeof(size_t));
-    EVP_DigestUpdate(evpCtx.get(), input_n_bytes, sizeof(input_n_bytes));
+    digestSizeT(evpCtx.get(), input_size);
 
     for (const auto& ct : input) {
         hashMpzToDigest(evpCtx.get(), ct.a);
@@ -420,9 +426,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     }
 
     size_t output_size = output.size();
-    unsigned char output_n_bytes[sizeof(size_t)];
-    std::memcpy(output_n_bytes, &output_size, sizeof(size_t));
-    EVP_DigestUpdate(evpCtx.get(), output_n_bytes, sizeof(output_n_bytes));
+    digestSizeT(evpCtx.get(), output_size);
 
     for (const auto& ct : output) {
         hashMpzToDigest(evpCtx.get(), ct.a);

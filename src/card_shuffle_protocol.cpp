@@ -39,9 +39,13 @@ TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securi
     std::seed_seq seed_seq2(seed2.begin(), seed2.end());
     player1.rng.seed(seed_seq1);
     player2.rng.seed(seed_seq2);
+    secureClearBytes(seed1.data(), 32);
+    secureClearBytes(seed2.data(), 32);
 }
 
 TwoPlayerCardShuffle::~TwoPlayerCardShuffle() noexcept {
+    secureClear(player1.keyPair.sk);
+    secureClear(player2.keyPair.sk);
 }
 
 void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, const std::string& player2Name) {
