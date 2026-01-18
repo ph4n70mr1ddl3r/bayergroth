@@ -304,6 +304,8 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     mpz_class m_inv;
     if (mpz_invert(m_inv.get_mpz_t(), combined_share.get_mpz_t(), player1.keyPair.pk.p.get_mpz_t()) == 0) {
         std::cout << "ERROR: Failed to compute modular inverse!" << std::endl;
+        secureClear(share1);
+        secureClear(share2);
         return false;
     }
 

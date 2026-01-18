@@ -353,16 +353,11 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     mpz_export(a_padded.data(), &a_exported, 1, 1, 0, 0, a.get_mpz_t());
     mpz_export(b_padded.data(), &b_exported, 1, 1, 0, 0, b.get_mpz_t());
 
-    size_t a_actual_bytes = std::min(a_exported, max_bytes);
-    size_t b_actual_bytes = std::min(b_exported, max_bytes);
-
-    size_t len_diff = (a_actual_bytes != a_bytes) | (b_actual_bytes != b_bytes);
-
-    unsigned char result = static_cast<unsigned char>(len_diff);
+    unsigned char result = 0;
 
     for (size_t i = 0; i < max_bytes; ++i) {
-        unsigned char a_byte = i < a_actual_bytes ? a_padded[i] : 0;
-        unsigned char b_byte = i < b_actual_bytes ? b_padded[i] : 0;
+        unsigned char a_byte = i < a_exported ? a_padded[i] : 0;
+        unsigned char b_byte = i < b_exported ? b_padded[i] : 0;
         result |= static_cast<unsigned char>(a_byte ^ b_byte);
     }
 
