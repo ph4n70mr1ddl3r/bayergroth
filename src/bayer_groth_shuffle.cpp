@@ -10,9 +10,31 @@
 
 namespace BayerGroth {
 
+namespace {
+
 static void secureClearMpz(mpz_class& val) noexcept {
     mpz_clear(val.get_mpz_t());
     mpz_init(val.get_mpz_t());
+}
+
+static const mpz_class ZERO(0);
+static const mpz_class ONE(1);
+static const mpz_class TWO(2);
+static constexpr int PRIME_ITERATIONS = 100;
+static constexpr size_t MAX_RANDOM_RETRY = 100;
+static constexpr size_t MIN_SECURE_BYTES = 32;
+
+static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
+    unsigned char bytes[sizeof(size_t)];
+    constexpr size_t byte_count = sizeof(size_t);
+    for (size_t i = 0; i < byte_count; ++i) {
+        bytes[byte_count - 1 - i] = static_cast<unsigned char>((value >> (i * 8)) & 0xFF);
+    }
+    EVP_DigestUpdate(ctx, bytes, byte_count);
+}
+
+static bool isValidElement(const mpz_class& val, const mpz_class& mod) noexcept {
+    return val >= ONE && val < mod;
 }
 
 struct EvpMdCtx {
@@ -29,21 +51,6 @@ struct EvpMdCtx {
     const EVP_MD_CTX* get() const noexcept { return ctx; }
 };
 
-static const mpz_class ZERO(0);
-static const mpz_class ONE(1);
-static const mpz_class TWO(2);
-static constexpr int PRIME_ITERATIONS = 100;
-static constexpr size_t MAX_RANDOM_RETRY = 100;
-static constexpr size_t MIN_SECURE_BYTES = 32;
-
-static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
-    unsigned char bytes[sizeof(size_t)];
-    for (size_t i = 0; i < sizeof(size_t); ++i) {
-        bytes[sizeof(size_t) - 1 - i] = static_cast<unsigned char>((value >> (i * 8)) & 0xFF);
-    }
-    EVP_DigestUpdate(ctx, bytes, sizeof(bytes));
-}
-
 struct GmpRandState {
     gmp_randstate_t state;
     GmpRandState() {
@@ -55,6 +62,8 @@ struct GmpRandState {
     GmpRandState(const GmpRandState&) = delete;
     GmpRandState& operator=(const GmpRandState&) = delete;
 };
+
+} // anonymous namespace
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
     : securityParam(std::max(securityParam_, 256)) {
@@ -80,7 +89,7 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
     rng = std::mt19937_64();
 }
 
-void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) {
+void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) noexcept {
     rng = rng_;
 }
 
@@ -171,7 +180,7 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
     return result_mpz % limit;
 }
 
-mpz_class BayerGrothShuffle::generateRandomNumber(const mpz_class& limit) {
+mpz_class BayerGrothShuffle::generateRandomNumber(const mpz_class& limit) noexcept {
     return getSecureRandom(limit);
 }
 
@@ -179,7 +188,7 @@ mpz_class BayerGrothShuffle::getRandomExponent() {
     return getSecureRandom(currentPk.q);
 }
 
-std::vector<size_t> BayerGrothShuffle::generatePermutation(size_t n, std::mt19937_64& rng) {
+std::vector<size_t> BayerGrothShuffle::generatePermutation(size_t n, std::mt19937_64& rng) noexcept {
     std::vector<size_t> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
     std::shuffle(perm.begin(), perm.end(), rng);
@@ -236,21 +245,32 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
 
     mpz_class g_candidate;
     mpz_class g_power;
+    constexpr int MAX_GENERATOR_ATTEMPTS = 1000;
     int attempts = 0;
-    do {
+    bool found_generator = false;
+
+    while (attempts < MAX_GENERATOR_ATTEMPTS) {
         mpz_urandomb(g_candidate.get_mpz_t(), randState.state, p_bits);
         g_candidate = modAdd(g_candidate, TWO, keyPair.pk.p);
 
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
-        attempts++;
-        if (attempts > 100) {
-            g_candidate = TWO;
-            mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
-                     keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+
+        if (g_power == ONE) {
+            found_generator = true;
             break;
         }
-    } while (g_power != ONE);
+        ++attempts;
+    }
+
+    if (!found_generator) {
+        g_candidate = TWO;
+        mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
+                 keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
+        if (g_power != ONE) {
+            throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
+        }
+    }
 
     keyPair.pk.g = g_candidate;
 
@@ -299,7 +319,7 @@ Ciphertext BayerGrothShuffle::reEncrypt(const PublicKey& pk, const Ciphertext& c
     return result;
 }
 
-mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) {
+mpz_class BayerGrothShuffle::decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) const {
     mpz_class a_sk;
     mpz_powm(a_sk.get_mpz_t(), ct.a.get_mpz_t(), sk.get_mpz_t(), pk.p.get_mpz_t());
     mpz_class a_sk_inv;
@@ -342,10 +362,6 @@ bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len,
     return result == 0;
 }
 
-static bool isValidElement(const mpz_class& val, const mpz_class& mod) noexcept {
-    return val >= ONE && val < mod;
-}
-
 void BayerGrothShuffle::generateCommitments(
     const PublicKey& pk,
     const std::vector<size_t>& permutation,
@@ -380,7 +396,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     const PublicKey& pk,
     const std::vector<Ciphertext>& input,
     const std::vector<Ciphertext>& output,
-    const ShuffleProof& proof) const {
+    const ShuffleProof& proof) const noexcept {
 
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len;
@@ -759,7 +775,7 @@ bool BayerGrothShuffle::verify(
     const PublicKey& pk,
     const std::vector<Ciphertext>& input,
     const std::vector<Ciphertext>& output,
-    const ShuffleProof& proof) const {
+    const ShuffleProof& proof) const noexcept {
 
     if (!isValidPublicKey(pk)) {
         return false;
@@ -783,16 +799,16 @@ bool BayerGrothShuffle::verify(
     return verifyEquations(pk, input, output, proof, challenge);
 }
 
-mpz_class BayerGrothShuffle::modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod) noexcept {
     if (exp < ZERO) {
-        throw std::invalid_argument("Exponent must be non-negative");
+        return mpz_class(0);
     }
     mpz_class result;
     mpz_powm(result.get_mpz_t(), base.get_mpz_t(), exp.get_mpz_t(), mod.get_mpz_t());
     return result;
 }
 
-mpz_class BayerGrothShuffle::modInv(const mpz_class& a, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modInv(const mpz_class& a, const mpz_class& mod) noexcept(false) {
     mpz_class result;
     if (mpz_invert(result.get_mpz_t(), a.get_mpz_t(), mod.get_mpz_t()) == 0) {
         throw std::runtime_error("Modular inverse does not exist");
@@ -800,27 +816,27 @@ mpz_class BayerGrothShuffle::modInv(const mpz_class& a, const mpz_class& mod) {
     return result;
 }
 
-mpz_class BayerGrothShuffle::modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept {
     mpz_class result = a + b;
     result %= mod;
     if (result < 0) result += mod;
     return result;
 }
 
-mpz_class BayerGrothShuffle::modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept {
     mpz_class result = a - b;
     result %= mod;
     if (result < 0) result += mod;
     return result;
 }
 
-mpz_class BayerGrothShuffle::modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept {
     mpz_class result = a * b;
     result %= mod;
     return result;
 }
 
-mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod) {
+mpz_class BayerGrothShuffle::modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept(false) {
     if (b == ZERO) {
         throw std::invalid_argument("Division by zero in modular arithmetic");
     }

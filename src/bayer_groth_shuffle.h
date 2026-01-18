@@ -62,12 +62,12 @@ public:
     explicit BayerGrothShuffle(int securityParam = 256);
     ~BayerGrothShuffle();
 
-    void setRandomGenerator(std::mt19937_64 rng);
+    void setRandomGenerator(std::mt19937_64 rng) noexcept;
 
     [[nodiscard]] KeyPair generateKeyPair();
     [[nodiscard]] Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
     [[nodiscard]] Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r);
-    [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct);
+    [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) const;
 
     [[nodiscard]] std::vector<Ciphertext> shuffle(
         const PublicKey& pk,
@@ -80,24 +80,24 @@ public:
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
-        const ShuffleProof& proof) const;
+        const ShuffleProof& proof) const noexcept;
 
     [[nodiscard]] mpz_class computeChallenge(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
-        const ShuffleProof& proof) const;
+        const ShuffleProof& proof) const noexcept;
 
-    [[nodiscard]] static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod);
-    [[nodiscard]] static mpz_class modInv(const mpz_class& a, const mpz_class& mod);
-    [[nodiscard]] static mpz_class modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    [[nodiscard]] static mpz_class modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    [[nodiscard]] static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
-    [[nodiscard]] static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod);
+    [[nodiscard]] static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod) noexcept;
+    [[nodiscard]] static mpz_class modInv(const mpz_class& a, const mpz_class& mod) noexcept(false);
+    [[nodiscard]] static mpz_class modAdd(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept;
+    [[nodiscard]] static mpz_class modSub(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept;
+    [[nodiscard]] static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept;
+    [[nodiscard]] static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept(false);
 
     [[nodiscard]] static mpz_class getSecureRandom(const mpz_class& limit);
-    [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit);
-    [[nodiscard]] static std::vector<size_t> generatePermutation(size_t n, std::mt19937_64& rng);
+    [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit) noexcept;
+    [[nodiscard]] static std::vector<size_t> generatePermutation(size_t n, std::mt19937_64& rng) noexcept;
 
     [[nodiscard]] static bool constantTimeEquals(const mpz_class& a, const mpz_class& b) noexcept;
     [[nodiscard]] static bool constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept;
