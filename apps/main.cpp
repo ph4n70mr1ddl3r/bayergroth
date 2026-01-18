@@ -161,7 +161,10 @@ int main() {
 
     std::cout << "Computing modular inverse..." << std::endl;
     mpz_class inv;
-    mpz_invert(inv.get_mpz_t(), combined.get_mpz_t(), aliceKey.pk.p.get_mpz_t());
+    if (mpz_invert(inv.get_mpz_t(), combined.get_mpz_t(), aliceKey.pk.p.get_mpz_t()) == 0) {
+        std::cerr << "Error: Failed to compute modular inverse" << std::endl;
+        return 1;
+    }
 
     std::cout << "Computing plaintext..." << std::endl;
     mpz_class plaintext;

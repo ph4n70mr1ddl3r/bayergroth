@@ -368,14 +368,7 @@ bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& p
     bool g1_order = shuffler.constantTimeEquals(g1_q, mpz_class(1));
     bool g2_order = shuffler.constantTimeEquals(g2_q, mpz_class(1));
 
-    bool g1_valid = shuffler.constantTimeEquals(g1_in_range ? mpz_class(1) : mpz_class(0), mpz_class(1));
-    bool g2_valid = shuffler.constantTimeEquals(g2_in_range ? mpz_class(1) : mpz_class(0), mpz_class(1));
-
-    bool compatible = shuffler.constantTimeEquals(p_match ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
-                      shuffler.constantTimeEquals(q_match ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
-                      shuffler.constantTimeEquals(g1_order ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
-                      shuffler.constantTimeEquals(g2_order ? mpz_class(1) : mpz_class(0), mpz_class(1)) &&
-                      g1_valid && g2_valid;
+    bool compatible = p_match && q_match && g1_order && g2_order && g1_in_range && g2_in_range;
 
     if (!p_match) {
         std::cout << "ERROR: Players have different prime modulus p" << std::endl;

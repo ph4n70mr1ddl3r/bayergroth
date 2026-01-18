@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <openssl/rand.h>
 #include <openssl/crypto.h>
+#include <cstdio>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
     if (size == 0) return;
