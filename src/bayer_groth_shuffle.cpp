@@ -4,7 +4,6 @@
 #include <openssl/evp.h>
 #include <openssl/crypto.h>
 #include <cstring>
-#include <ctime>
 #include <cstddef>
 #include <numeric>
 
@@ -66,7 +65,7 @@ struct GmpRandState {
 } // anonymous namespace
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
-    : securityParam(securityParam_ >= 256 ? securityParam_ : 256) {
+    : securityParam(securityParam_) {
     if (securityParam_ < 256 || securityParam_ > 4096) {
         throw std::invalid_argument("Security parameter must be between 256 and 4096 bits");
     }
@@ -84,12 +83,11 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
         }
     }
     S_matrix.clear();
-    S_matrix.shrink_to_fit();
     secureClearMpz(currentPk.g);
     secureClearMpz(currentPk.h);
     secureClearMpz(currentPk.q);
     secureClearMpz(currentPk.p);
-    rng = std::mt19937_64();
+    std::memset(&rng, 0, sizeof(rng));
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) noexcept {
@@ -646,7 +644,6 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
         }
     }
     S_matrix.clear();
-    S_matrix.shrink_to_fit();
 
     return output;
 }
