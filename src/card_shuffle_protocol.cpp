@@ -16,10 +16,14 @@ std::string Card::toString() const noexcept {
 }
 
 int Card::toInt() const noexcept {
-    if (suit < 0 || suit >= 4 || rank < 0 || rank >= 13) {
-        return 0;
+    if (!isValid()) {
+        return -1;
     }
     return suit * 13 + rank;
+}
+
+bool Card::isValid() const noexcept {
+    return suit >= 0 && suit < 4 && rank >= 0 && rank < 13;
 }
 
 Card Card::fromInt(int value) {
@@ -69,6 +73,9 @@ void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, con
 
 BayerGroth::Ciphertext TwoPlayerCardShuffle::encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng) {
     shuffler.setRandomGenerator(rng);
+    if (!card.isValid()) {
+        throw std::invalid_argument("Invalid card: suit and rank must be within valid ranges");
+    }
     int cardValue = card.toInt() + 1;
     if (cardValue < 1 || cardValue > 52) {
         throw std::invalid_argument("Invalid card value for encryption");

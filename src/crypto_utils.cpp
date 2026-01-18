@@ -4,18 +4,20 @@
 #include <openssl/crypto.h>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
+    if (size == 0) return;
+
     int result = RAND_bytes(buffer, size);
 
     if (result != 1) {
         FILE* f = fopen("/dev/urandom", "rb");
-        if (f) {
-            size_t read_count = fread(buffer, 1, size, f);
-            fclose(f);
-            if (read_count != size) {
-                throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
-            }
-        } else {
-            throw std::runtime_error("Failed to read from /dev/urandom and OpenSSL RAND_bytes failed");
+        if (!f) {
+            throw std::runtime_error("Failed to open /dev/urandom and OpenSSL RAND_bytes failed");
+        }
+        size_t read_count = fread(buffer, 1, size, f);
+        int ferror_result = ferror(f);
+        fclose(f);
+        if (read_count != size || ferror_result) {
+            throw std::runtime_error("Failed to read sufficient random bytes from /dev/urandom");
         }
     }
 }

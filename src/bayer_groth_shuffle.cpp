@@ -66,7 +66,10 @@ struct GmpRandState {
 } // anonymous namespace
 
 BayerGrothShuffle::BayerGrothShuffle(int securityParam_)
-    : securityParam(std::max(securityParam_, 256)) {
+    : securityParam(securityParam_ >= 256 ? securityParam_ : 256) {
+    if (securityParam_ < 256 || securityParam_ > 4096) {
+        throw std::invalid_argument("Security parameter must be between 256 and 4096 bits");
+    }
     std::vector<unsigned char> seed_bytes(32);
     getRandomBytesFromDevice(seed_bytes.data(), 32);
     std::seed_seq seed_seq(seed_bytes.begin(), seed_bytes.end());
@@ -156,6 +159,8 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
         max_valid = limit_minus_one;
     }
 
+    mpz_class max_valid_plus_one = max_valid + ONE;
+
     for (size_t retry = 0; retry < MAX_RANDOM_RETRY; ++retry) {
         std::vector<unsigned char> random_bytes = getRandomBytesFromDevice(byte_count);
 
@@ -164,7 +169,7 @@ mpz_class BayerGrothShuffle::getSecureRandom(const mpz_class& limit) {
             result_mpz = result_mpz * 256 + random_bytes[i];
         }
 
-        if (result_mpz <= max_valid) {
+        if (result_mpz < max_valid_plus_one) {
             secureClearBytes(random_bytes.data(), byte_count);
             return result_mpz % limit;
         }
@@ -343,10 +348,24 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     std::vector<unsigned char> a_padded(max_bytes, 0);
     std::vector<unsigned char> b_padded(max_bytes, 0);
 
-    mpz_export(a_padded.data(), nullptr, 1, 1, 0, 0, a.get_mpz_t());
-    mpz_export(b_padded.data(), nullptr, 1, 1, 0, 0, b.get_mpz_t());
+    size_t a_exported = 0, b_exported = 0;
+    mpz_export(a_padded.data(), &a_exported, 1, 1, 0, 0, a.get_mpz_t());
+    mpz_export(b_padded.data(), &b_exported, 1, 1, 0, 0, b.get_mpz_t());
 
-    return CRYPTO_memcmp(a_padded.data(), b_padded.data(), max_bytes) == 0;
+    size_t a_actual_bytes = std::min(a_exported, max_bytes);
+    size_t b_actual_bytes = std::min(b_exported, max_bytes);
+
+    size_t len_diff = (a_actual_bytes != a_bytes) | (b_actual_bytes != b_bytes);
+
+    unsigned char result = static_cast<unsigned char>(len_diff);
+
+    for (size_t i = 0; i < max_bytes; ++i) {
+        unsigned char a_byte = i < a_actual_bytes ? a_padded[i] : 0;
+        unsigned char b_byte = i < b_actual_bytes ? b_padded[i] : 0;
+        result |= static_cast<unsigned char>(a_byte ^ b_byte);
+    }
+
+    return result == 0;
 }
 
 bool BayerGrothShuffle::constantTimeEquals(const unsigned char* a, size_t a_len, const unsigned char* b, size_t b_len) noexcept {

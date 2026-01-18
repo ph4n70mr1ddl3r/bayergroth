@@ -17,6 +17,7 @@ struct Card {
     Suit suit;
     std::string toString() const noexcept;
     int toInt() const noexcept;
+    bool isValid() const noexcept;
     static Card fromInt(int value);
 };
 
