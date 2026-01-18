@@ -11,8 +11,8 @@
 
 using namespace BayerGroth;
 
-const char* RANKS[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
-const char* SUITS[] = {"H", "D", "C", "S"};
+static const char* RANKS[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
+static const char* SUITS[] = {"H", "D", "C", "S"};
 
 std::string formatCard(int value) {
     if (value < 0 || value >= 52) return "Unknown";

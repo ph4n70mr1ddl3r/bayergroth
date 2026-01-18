@@ -86,7 +86,7 @@ public:
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<Ciphertext>& output,
-        const ShuffleProof& proof) const noexcept;
+        const ShuffleProof& proof) const;
 
     [[nodiscard]] static mpz_class modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod) noexcept;
     [[nodiscard]] static mpz_class modInv(const mpz_class& a, const mpz_class& mod) noexcept(false);

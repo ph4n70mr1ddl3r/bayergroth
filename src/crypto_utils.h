@@ -4,10 +4,11 @@
 #include <vector>
 #include <cstddef>
 #include <cstring>
+#include <openssl/crypto.h>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size);
 
-std::vector<unsigned char> getRandomBytesFromDevice(size_t size);
+[[nodiscard]] std::vector<unsigned char> getRandomBytesFromDevice(size_t size);
 
 void secureClearBytes(unsigned char* buffer, size_t size);
 

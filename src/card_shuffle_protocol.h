@@ -15,10 +15,10 @@ enum Suit { HEARTS, DIAMONDS, CLUBS, SPADES };
 struct Card {
     int rank;
     Suit suit;
-    std::string toString() const noexcept;
-    int toInt() const noexcept;
-    bool isValid() const noexcept;
-    static Card fromInt(int value);
+    [[nodiscard]] std::string toString() const noexcept;
+    [[nodiscard]] int toInt() const noexcept;
+    [[nodiscard]] bool isValid() const noexcept;
+    [[nodiscard]] static Card fromInt(int value);
 };
 
 struct Player {
@@ -38,7 +38,7 @@ struct ShuffleRound {
 struct DeckState {
     std::vector<BayerGroth::Ciphertext> encryptedCards;
     std::vector<ShuffleRound> shuffleHistory;
-    int currentPlayerIndex;
+    int currentPlayerIndex = 0;
 };
 
 class TwoPlayerCardShuffle {
@@ -61,10 +61,10 @@ private:
     Player player2;
     DeckState deckState;
 
-    BayerGroth::Ciphertext encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng);
-    Card decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct);
-    bool verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof);
-    bool verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2);
+    [[nodiscard]] BayerGroth::Ciphertext encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng);
+    [[nodiscard]] Card decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct);
+    [[nodiscard]] bool verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof);
+    [[nodiscard]] bool verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2);
 };
 
 } // namespace CardShuffle

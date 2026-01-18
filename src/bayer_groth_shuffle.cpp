@@ -413,13 +413,15 @@ mpz_class BayerGrothShuffle::computeChallenge(
     const PublicKey& pk,
     const std::vector<Ciphertext>& input,
     const std::vector<Ciphertext>& output,
-    const ShuffleProof& proof) const noexcept {
+    const ShuffleProof& proof) const {
 
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len;
 
     EvpMdCtx evpCtx;
-    EVP_DigestInit_ex(evpCtx.get(), EVP_sha256(), nullptr);
+    if (EVP_DigestInit_ex(evpCtx.get(), EVP_sha256(), nullptr) != 1) {
+        throw std::runtime_error("Failed to initialize EVP digest context");
+    }
 
     unsigned char domain_sep = 0x01;
     EVP_DigestUpdate(evpCtx.get(), &domain_sep, sizeof(domain_sep));
