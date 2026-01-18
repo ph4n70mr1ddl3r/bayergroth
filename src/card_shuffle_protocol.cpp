@@ -66,7 +66,7 @@ void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, con
     std::cout << player1.name << " generated key pair" << std::endl;
     std::cout << player2.name << " generated key pair" << std::endl;
 
-    if (!verifyKeyCompatibility(player1.keyPair.pk, player2.keyPair.pk)) {
+    if (!verifyKeyCompatibility(player1.keyPair, player2.keyPair)) {
         throw std::runtime_error("Player key incompatibility detected");
     }
 }
@@ -355,12 +355,15 @@ bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const 
     return shuffler.verify(pk, input, output, proof);
 }
 
-bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2) {
+bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::KeyPair& keyPair1, const BayerGroth::KeyPair& keyPair2) {
+    const BayerGroth::PublicKey& pk1 = keyPair1.pk;
+    const BayerGroth::PublicKey& pk2 = keyPair2.pk;
+
     bool p_match = shuffler.constantTimeEquals(pk1.p, pk2.p);
     bool q_match = shuffler.constantTimeEquals(pk1.q, pk2.q);
 
-    bool g1_in_range = pk1.g >= mpz_class(1) && pk1.g < pk1.p;
-    bool g2_in_range = pk2.g >= mpz_class(1) && pk2.g < pk2.p;
+    bool g1_in_range = pk1.g > mpz_class(1) && pk1.g < pk1.p;
+    bool g2_in_range = pk2.g > mpz_class(1) && pk2.g < pk2.p;
 
     mpz_class g1_q, g2_q;
     mpz_powm(g1_q.get_mpz_t(), pk1.g.get_mpz_t(), pk1.q.get_mpz_t(), pk1.p.get_mpz_t());
@@ -368,7 +371,15 @@ bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::PublicKey& p
     bool g1_order = shuffler.constantTimeEquals(g1_q, mpz_class(1));
     bool g2_order = shuffler.constantTimeEquals(g2_q, mpz_class(1));
 
-    bool compatible = p_match && q_match && g1_order && g2_order && g1_in_range && g2_in_range;
+    mpz_class h1_g1, h2_g2;
+    mpz_powm(h1_g1.get_mpz_t(), pk1.g.get_mpz_t(), keyPair1.sk.get_mpz_t(), pk1.p.get_mpz_t());
+    mpz_powm(h2_g2.get_mpz_t(), pk2.g.get_mpz_t(), keyPair2.sk.get_mpz_t(), pk2.p.get_mpz_t());
+    bool h1_matches = shuffler.constantTimeEquals(h1_g1, pk1.h);
+    bool h2_matches = shuffler.constantTimeEquals(h2_g2, pk2.h);
+
+    bool compatible = p_match && q_match && g1_order && g2_order &&
+                      g1_in_range && g2_in_range &&
+                      h1_matches && h2_matches;
 
     if (!p_match) {
         std::cout << "ERROR: Players have different prime modulus p" << std::endl;

@@ -64,7 +64,7 @@ private:
     [[nodiscard]] BayerGroth::Ciphertext encryptCard(const BayerGroth::PublicKey& pk, const Card& card, std::mt19937_64& rng);
     [[nodiscard]] Card decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct);
     [[nodiscard]] bool verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof);
-    [[nodiscard]] bool verifyKeyCompatibility(const BayerGroth::PublicKey& pk1, const BayerGroth::PublicKey& pk2);
+    [[nodiscard]] bool verifyKeyCompatibility(const BayerGroth::KeyPair& keyPair1, const BayerGroth::KeyPair& keyPair2);
 };
 
 } // namespace CardShuffle

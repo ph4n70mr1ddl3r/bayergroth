@@ -11,17 +11,19 @@ namespace BayerGroth {
 
 namespace {
 
-static void secureClearMpz(mpz_class& val) noexcept {
-    mpz_clear(val.get_mpz_t());
-    mpz_init(val.get_mpz_t());
-}
-
 static const mpz_class ZERO(0);
 static const mpz_class ONE(1);
 static const mpz_class TWO(2);
 static constexpr int PRIME_ITERATIONS = 100;
 static constexpr size_t MAX_RANDOM_RETRY = 100;
 static constexpr size_t MIN_SECURE_BYTES = 32;
+
+static void secureClearMpz(mpz_class& val) noexcept {
+    if (val != ZERO) {
+        mpz_class zero(0);
+        mpz_set(val.get_mpz_t(), zero.get_mpz_t());
+    }
+}
 
 static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
     unsigned char bytes[sizeof(size_t)];
@@ -33,7 +35,7 @@ static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
 }
 
 static bool isValidElement(const mpz_class& val, const mpz_class& mod) noexcept {
-    return val >= ONE && val < mod;
+    return val > ZERO && val < mod;
 }
 
 struct EvpMdCtx {
@@ -426,6 +428,9 @@ mpz_class BayerGrothShuffle::computeChallenge(
 
     unsigned char domain_sep = 0x01;
     EVP_DigestUpdate(evpCtx.get(), &domain_sep, sizeof(domain_sep));
+
+    const char* protocol_id = "BayerGroth2012-Shuffle-v1";
+    EVP_DigestUpdate(evpCtx.get(), protocol_id, std::strlen(protocol_id));
 
     size_t n = proof.A.size();
     digestSizeT(evpCtx.get(), n);
