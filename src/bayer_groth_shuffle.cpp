@@ -83,11 +83,12 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
         }
     }
     S_matrix.clear();
+    S_matrix.shrink_to_fit();
     secureClearMpz(currentPk.g);
     secureClearMpz(currentPk.h);
     secureClearMpz(currentPk.q);
     secureClearMpz(currentPk.p);
-    std::memset(&rng, 0, sizeof(rng));
+    rng = std::mt19937_64();
 }
 
 void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) noexcept {
