@@ -117,11 +117,16 @@ void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) noexcept {
 
 void BayerGrothShuffle::hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) noexcept {
     size_t size = (mpz_sizeinbase(value.get_mpz_t(), 2) + 7) / 8;
-    try {
-        std::vector<unsigned char> bytes(size);
-        mpz_export(bytes.data(), nullptr, 1, 1, 0, 0, value.get_mpz_t());
-        EVP_DigestUpdate(ctx, bytes.data(), bytes.size());
-    } catch (...) {
+    if (size == 0) {
+        unsigned char zero_byte = 0;
+        EVP_DigestUpdate(ctx, &zero_byte, 1);
+        return;
+    }
+    std::vector<unsigned char> bytes(size);
+    size_t exported = 0;
+    mpz_export(bytes.data(), &exported, 1, 1, 0, 0, value.get_mpz_t());
+    if (exported > 0) {
+        EVP_DigestUpdate(ctx, bytes.data(), exported);
     }
 }
 
@@ -130,8 +135,13 @@ bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) noex
     mpz_class two_q_plus_one;
     mpz_mul_ui(two_q_plus_one.get_mpz_t(), q.get_mpz_t(), 2);
     mpz_add_ui(two_q_plus_one.get_mpz_t(), two_q_plus_one.get_mpz_t(), 1);
-    if (p != two_q_plus_one) return false;
-    return mpz_probab_prime_p(q.get_mpz_t(), PRIME_ITERATIONS) != 0;
+    if (p != two_q_plus_one) {
+        secureClearMpz(two_q_plus_one);
+        return false;
+    }
+    bool result = mpz_probab_prime_p(q.get_mpz_t(), PRIME_ITERATIONS) != 0;
+    secureClearMpz(two_q_plus_one);
+    return result;
 }
 
 bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
@@ -306,8 +316,11 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         if (g_power != ONE) {
+            secureClearMpz(g_candidate);
+            secureClearMpz(g_power);
             throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
         }
+        found_generator = true;
     }
 
     keyPair.pk.g = g_candidate;
@@ -387,7 +400,8 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     mpz_export(a_padded.data(), &a_exported, 1, 1, 0, 0, a.get_mpz_t());
     mpz_export(b_padded.data(), &b_exported, 1, 1, 0, 0, b.get_mpz_t());
 
-    unsigned char result = 0;
+    size_t size_diff = a_bytes ^ b_bytes;
+    unsigned char result = static_cast<unsigned char>(size_diff);
 
     for (size_t i = 0; i < max_bytes; ++i) {
         unsigned char a_byte = i < a_exported ? a_padded[i] : 0;
@@ -435,6 +449,8 @@ void BayerGrothShuffle::generateCommitments(
             mpz_class d_ij = modExp(pk.g, alpha_ij, pk.p);
             d_ij = modMul(d_ij, modExp(pk.h, beta_ij, pk.p), pk.p);
             proof.D[i][j] = d_ij;
+            secureClearMpz(alpha_ij);
+            secureClearMpz(beta_ij);
         }
     }
 }
@@ -689,6 +705,10 @@ bool BayerGrothShuffle::verifyEquations(
     const std::vector<Ciphertext>& output,
     const ShuffleProof& proof,
     const mpz_class& challenge) const {
+
+    if (!isValidPublicKey(pk)) {
+        return false;
+    }
 
     size_t n = input.size();
 
