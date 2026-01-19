@@ -7,6 +7,8 @@
 #include <openssl/crypto.h>
 #include <gmpxx.h>
 
+#include "bayer_groth_shuffle.h"
+
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size);
 
 [[nodiscard]] std::vector<unsigned char> getRandomBytesFromDevice(size_t size);
@@ -14,16 +16,20 @@ void getRandomBytesFromDevice(unsigned char* buffer, size_t size);
 void secureClearBytes(unsigned char* buffer, size_t size);
 
 template<typename T>
-void secureClear(T& obj) {
+void secureClear(T& obj) noexcept {
     OPENSSL_cleanse(&obj, sizeof(T));
 }
 
 template<>
-inline void secureClear<mpz_class>(mpz_class& obj) {
+inline void secureClear<mpz_class>(mpz_class& obj) noexcept {
     if (obj != 0) {
-        mpz_class zero(0);
-        mpz_set(obj.get_mpz_t(), zero.get_mpz_t());
+        mpz_set_ui(obj.get_mpz_t(), 0);
     }
+}
+
+inline void secureClearCiphertext(BayerGroth::Ciphertext& ct) noexcept {
+    secureClear(ct.a);
+    secureClear(ct.b);
 }
 
 #endif // CRYPTO_UTILS_H

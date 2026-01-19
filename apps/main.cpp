@@ -11,10 +11,10 @@
 
 using namespace BayerGroth;
 
-static const char* RANKS[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
-static const char* SUITS[] = {"H", "D", "C", "S"};
+static const char* const RANKS[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
+static const char* const SUITS[] = {"H", "D", "C", "S"};
 
-std::string formatCard(int value) {
+std::string formatCard(int value) noexcept {
     if (value < 0 || value >= 52) return "Unknown";
     int rank = value % 13;
     int suit = value / 13;
