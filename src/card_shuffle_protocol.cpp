@@ -88,24 +88,14 @@ BayerGroth::Ciphertext TwoPlayerCardShuffle::encryptCard(const BayerGroth::Publi
 }
 
 Card TwoPlayerCardShuffle::decryptCard(const BayerGroth::KeyPair& keyPair, const BayerGroth::Ciphertext& ct) {
-    mpz_class m;
-    mpz_powm(m.get_mpz_t(), ct.a.get_mpz_t(), keyPair.sk.get_mpz_t(), keyPair.pk.p.get_mpz_t());
-    mpz_class m_inv;
-    if (mpz_invert(m_inv.get_mpz_t(), m.get_mpz_t(), keyPair.pk.p.get_mpz_t()) == 0) {
-        throw std::runtime_error("Failed to compute modular inverse during decryption");
-    }
-    mpz_class plaintext = BayerGroth::BayerGrothShuffle::modMul(ct.b, m_inv, keyPair.pk.p);
+    mpz_class plaintext = shuffler.decrypt(keyPair.pk, keyPair.sk, ct);
 
     if (plaintext < mpz_class(1) || plaintext > mpz_class(DECK_SIZE)) {
-        secureClear<mpz_class>(m);
-        secureClear<mpz_class>(m_inv);
         secureClear<mpz_class>(plaintext);
         throw std::runtime_error("Decrypted value out of valid card range: " + plaintext.get_str());
     }
 
     int value = static_cast<int>(plaintext.get_si()) - 1;
-    secureClear<mpz_class>(m);
-    secureClear<mpz_class>(m_inv);
     secureClear<mpz_class>(plaintext);
     return Card::fromInt(value);
 }
@@ -382,12 +372,16 @@ bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::KeyPair& key
     mpz_powm(g2_q.get_mpz_t(), pk2.g.get_mpz_t(), pk2.q.get_mpz_t(), pk2.p.get_mpz_t());
     bool g1_order = shuffler.constantTimeEquals(g1_q, mpz_class(1));
     bool g2_order = shuffler.constantTimeEquals(g2_q, mpz_class(1));
+    secureClear<mpz_class>(g1_q);
+    secureClear<mpz_class>(g2_q);
 
     mpz_class h1_g1, h2_g2;
     mpz_powm(h1_g1.get_mpz_t(), pk1.g.get_mpz_t(), keyPair1.sk.get_mpz_t(), pk1.p.get_mpz_t());
     mpz_powm(h2_g2.get_mpz_t(), pk2.g.get_mpz_t(), keyPair2.sk.get_mpz_t(), pk2.p.get_mpz_t());
     bool h1_matches = shuffler.constantTimeEquals(h1_g1, pk1.h);
     bool h2_matches = shuffler.constantTimeEquals(h2_g2, pk2.h);
+    secureClear<mpz_class>(h1_g1);
+    secureClear<mpz_class>(h2_g2);
 
     bool compatible = p_match && q_match && g1_order && g2_order &&
                       g1_in_range && g2_in_range &&

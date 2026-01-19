@@ -138,14 +138,18 @@ bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
     mpz_class p_minus_one_div_q;
     mpz_tdiv_q(p_minus_one_div_q.get_mpz_t(), p_minus_one.get_mpz_t(), pk.q.get_mpz_t());
     if (mpz_cmp_ui(p_minus_one_div_q.get_mpz_t(), 2) != 0) return false;
+    secureClearMpz(p_minus_one);
+    secureClearMpz(p_minus_one_div_q);
 
     mpz_class g_q;
     mpz_powm(g_q.get_mpz_t(), pk.g.get_mpz_t(), pk.q.get_mpz_t(), pk.p.get_mpz_t());
     if (g_q != ONE) return false;
+    secureClearMpz(g_q);
 
     mpz_class h_q;
     mpz_powm(h_q.get_mpz_t(), pk.h.get_mpz_t(), pk.q.get_mpz_t(), pk.p.get_mpz_t());
     if (h_q != ONE) return false;
+    secureClearMpz(h_q);
 
     if (!isSafePrime(pk.p, pk.q)) return false;
 
@@ -295,11 +299,15 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         if (g_power != ONE) {
+            secureClearMpz(g_candidate);
+            secureClearMpz(g_power);
             throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
         }
     }
 
     keyPair.pk.g = g_candidate;
+    secureClearMpz(g_candidate);
+    secureClearMpz(g_power);
 
     mpz_urandomb(keyPair.sk.get_mpz_t(), randState.state, q_bits);
     keyPair.sk = modAdd(keyPair.sk, TWO, keyPair.pk.q);

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <openssl/crypto.h>
 #include <gmpxx.h>
+#include <gmp.h>
 
 #include "bayer_groth_shuffle.h"
 
@@ -22,9 +23,14 @@ void secureClear(T& obj) noexcept {
 
 template<>
 inline void secureClear<mpz_class>(mpz_class& obj) noexcept {
-    if (obj != 0) {
-        mpz_set_ui(obj.get_mpz_t(), 0);
+    mpz_ptr mpz = obj.get_mpz_t();
+    size_t limb_count = mpz_size(mpz);
+    if (limb_count > 0) {
+        mp_limb_t* limbs = mpz_limbs_write(mpz, limb_count);
+        OPENSSL_cleanse(limbs, limb_count * sizeof(mp_limb_t));
+        mpz_limbs_finish(mpz, 0);
     }
+    mpz_set_ui(mpz, 0);
 }
 
 inline void secureClearCiphertext(BayerGroth::Ciphertext& ct) noexcept {
