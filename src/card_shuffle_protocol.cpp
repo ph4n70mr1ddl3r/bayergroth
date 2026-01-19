@@ -6,6 +6,7 @@
 #include <chrono>
 #include <iomanip>
 #include <cstdio>
+#include <gmp.h>
 
 namespace CardShuffle {
 
@@ -283,10 +284,14 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
 
     if (!p1_correct) {
         std::cout << "ERROR: Player 1's secret key does not match their public key!" << std::endl;
+        secureClear<mpz_class>(share1);
+        secureClear<mpz_class>(share2);
         return false;
     }
     if (!p2_correct) {
         std::cout << "ERROR: Player 2's secret key does not match their public key!" << std::endl;
+        secureClear<mpz_class>(share1);
+        secureClear<mpz_class>(share2);
         return false;
     }
 
@@ -295,6 +300,8 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
     mpz_class check2 = shuffler.modExp(ct.a, player1.keyPair.sk * player2.keyPair.sk, player1.keyPair.pk.p);
     if (!shuffler.constantTimeEquals(check1, check2)) {
         std::cout << "ERROR: Share verification failed - shares do not match!" << std::endl;
+        secureClear<mpz_class>(share1);
+        secureClear<mpz_class>(share2);
         return false;
     }
     std::cout << "Share verification successful!" << std::endl;
@@ -315,11 +322,16 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
 
     if (value < 0 || value > 51) {
         std::cout << "Error: Invalid card value (" << value << ")!" << std::endl;
+        secureClear<mpz_class>(share1);
+        secureClear<mpz_class>(share2);
         return false;
     }
 
     card = Card::fromInt(value);
     std::cout << "Revealed card: " << card.toString() << std::endl;
+
+    secureClear<mpz_class>(share1);
+    secureClear<mpz_class>(share2);
 
     return true;
 }

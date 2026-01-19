@@ -23,8 +23,9 @@ static constexpr size_t MAX_SHUFFLE_SIZE = 1000;
 static const char* PROTOCOL_ID = "BayerGroth2012-Shuffle-v1";
 
 static void secureClearMpz(mpz_class& val) noexcept {
-    if (val != ZERO) {
-        mpz_set_ui(val.get_mpz_t(), 0);
+    mpz_ptr mpz = val.get_mpz_t();
+    if (mpz_cmp_ui(mpz, 0) != 0) {
+        mpz_set_ui(mpz, 0);
     }
 }
 

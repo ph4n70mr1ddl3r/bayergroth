@@ -6,7 +6,7 @@
 #include <cstddef>
 
 void getRandomBytesFromDevice(unsigned char* buffer, size_t size) {
-    if (size == 0) return;
+    if (size == 0 || !buffer) return;
 
     int result = RAND_bytes(buffer, size);
 
@@ -30,5 +30,7 @@ std::vector<unsigned char> getRandomBytesFromDevice(size_t size) {
 }
 
 void secureClearBytes(unsigned char* buffer, size_t size) noexcept {
-    OPENSSL_cleanse(buffer, size);
+    if (buffer && size > 0) {
+        OPENSSL_cleanse(buffer, size);
+    }
 }
