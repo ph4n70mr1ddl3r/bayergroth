@@ -60,7 +60,7 @@ struct ShuffleProof {
 class BayerGrothShuffle {
 public:
     explicit BayerGrothShuffle(int securityParam = 256);
-    ~BayerGrothShuffle();
+    ~BayerGrothShuffle() noexcept;
 
     void setRandomGenerator(std::mt19937_64 rng) noexcept;
 

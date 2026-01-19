@@ -9,6 +9,18 @@
 
 namespace CardShuffle {
 
+namespace {
+
+static const mpz_class ZERO(0);
+
+static void secureClearMpz(mpz_class& val) noexcept {
+    if (val != ZERO) {
+        mpz_set_ui(val.get_mpz_t(), 0);
+    }
+}
+
+} // anonymous namespace
+
 std::string Card::toString() const noexcept {
     static const char* ranks[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
     static const char* suits[] = {"♥", "♦", "♣", "♠"};
@@ -93,10 +105,16 @@ Card TwoPlayerCardShuffle::decryptCard(const BayerGroth::KeyPair& keyPair, const
     mpz_class plaintext = BayerGroth::BayerGrothShuffle::modMul(ct.b, m_inv, keyPair.pk.p);
 
     if (plaintext < mpz_class(1) || plaintext > mpz_class(DECK_SIZE)) {
+        secureClearMpz(m);
+        secureClearMpz(m_inv);
+        secureClearMpz(plaintext);
         throw std::runtime_error("Decrypted value out of valid card range: " + plaintext.get_str());
     }
 
     int value = static_cast<int>(plaintext.get_si()) - 1;
+    secureClearMpz(m);
+    secureClearMpz(m_inv);
+    secureClearMpz(plaintext);
     return Card::fromInt(value);
 }
 

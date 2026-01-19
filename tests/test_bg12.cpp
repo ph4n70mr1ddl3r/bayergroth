@@ -90,6 +90,62 @@ int main() {
         std::cout << "    Decryption: " << (all_correct ? "ALL CORRECT" : "ERROR") << std::endl;
     }
 
+    std::cout << "\n[8] Edge case: Single element shuffle" << std::endl;
+    {
+        BayerGrothShuffle bg12_single(256);
+        bg12_single.setRandomGenerator(rng);
+        KeyPair key_single = bg12_single.generateKeyPair();
+        Ciphertext single_ct = bg12_single.encrypt(key_single.pk, mpz_class(42));
+        std::vector<Ciphertext> single_input = {single_ct};
+        std::vector<size_t> single_perm = {0};
+        std::vector<mpz_class> single_rand = {bg12_single.generateRandomNumber(key_single.pk.q)};
+        ShuffleProof single_proof;
+        std::vector<Ciphertext> single_output = bg12_single.shuffle(key_single.pk, single_input, single_rand, single_perm, single_proof);
+        bool single_valid = bg12_single.verify(key_single.pk, single_input, single_output, single_proof);
+        std::cout << "    Single element shuffle: " << (single_valid ? "VALID" : "INVALID") << std::endl;
+        if (!single_valid) return 1;
+    }
+
+    std::cout << "\n[9] Edge case: Modified proof fails verification" << std::endl;
+    {
+        ShuffleProof tampered_proof = proof;
+        tampered_proof.z1[0] = tampered_proof.z1[0] + mpz_class(1);
+        bool tampered_valid = bg12.verify(key.pk, input, output, tampered_proof);
+        std::cout << "    Tampered proof verification: " << (!tampered_valid ? "REJECTED (expected)" : "ACCEPTED (BUG!)") << std::endl;
+        if (tampered_valid) {
+            std::cout << "    ERROR: Tampered proof should not validate!" << std::endl;
+            return 1;
+        }
+    }
+
+    std::cout << "\n[10] Edge case: Wrong input size fails" << std::endl;
+    {
+        std::vector<Ciphertext> wrong_size_input = input;
+        wrong_size_input.push_back(input[0]);
+        std::vector<Ciphertext> wrong_size_output = output;
+        bool size_mismatch = bg12.verify(key.pk, wrong_size_input, wrong_size_output, proof);
+        std::cout << "    Different sized vectors rejected: " << (!size_mismatch ? "YES (expected)" : "NO (BUG!)") << std::endl;
+        if (size_mismatch) {
+            std::cout << "    ERROR: Different sized inputs should not validate!" << std::endl;
+            return 1;
+        }
+    }
+
+    std::cout << "\n[11] Edge case: Constant-time comparison works" << std::endl;
+    {
+        mpz_class a(12345);
+        mpz_class b(12345);
+        mpz_class c(67890);
+        bool same = BayerGrothShuffle::constantTimeEquals(a, b);
+        bool diff = BayerGrothShuffle::constantTimeEquals(a, c);
+        std::cout << "    Equal values compare equal: " << (same ? "YES" : "NO") << std::endl;
+        std::cout << "    Different values compare different: " << (!diff ? "YES" : "NO") << std::endl;
+        if (!same || diff) {
+            std::cout << "    ERROR: constantTimeEquals not working correctly!" << std::endl;
+            return 1;
+        }
+    }
+
     auto end = std::chrono::high_resolution_clock::now();
     auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 

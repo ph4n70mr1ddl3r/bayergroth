@@ -131,7 +131,7 @@ bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
     if (pk.p <= 0 || pk.q <= 0 || pk.g <= 0 || pk.h <= 0) return false;
     if (pk.g <= ONE || pk.g >= pk.p) return false;
     if (pk.h <= ONE || pk.h >= pk.p) return false;
-    if (pk.g == pk.h) return false;
+    if (constantTimeEquals(pk.g, pk.h)) return false;
 
     mpz_class p_minus_one;
     mpz_sub_ui(p_minus_one.get_mpz_t(), pk.p.get_mpz_t(), 1);
@@ -421,8 +421,6 @@ void BayerGrothShuffle::generateCommitments(
             mpz_class d_ij = modExp(pk.g, alpha_ij, pk.p);
             d_ij = modMul(d_ij, modExp(pk.h, beta_ij, pk.p), pk.p);
             proof.D[i][j] = d_ij;
-            secureClearMpz(alpha_ij);
-            secureClearMpz(beta_ij);
         }
     }
 }
