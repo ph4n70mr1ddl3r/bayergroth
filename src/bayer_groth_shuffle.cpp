@@ -235,6 +235,7 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
     }
     gmp_randseed(randState.state, seed_mpz.get_mpz_t());
     secureClearBytes(seed_bytes.data(), 64);
+    secureClearMpz(seed_mpz);
 
     size_t p_bits = securityParam;
     size_t q_bits = p_bits - 1;

@@ -11,14 +11,6 @@ namespace CardShuffle {
 
 namespace {
 
-static const mpz_class ZERO(0);
-
-static void secureClearMpz(mpz_class& val) noexcept {
-    if (val != ZERO) {
-        mpz_set_ui(val.get_mpz_t(), 0);
-    }
-}
-
 } // anonymous namespace
 
 std::string Card::toString() const noexcept {
@@ -60,8 +52,8 @@ TwoPlayerCardShuffle::TwoPlayerCardShuffle(int securityParam_) : shuffler(securi
 }
 
 TwoPlayerCardShuffle::~TwoPlayerCardShuffle() noexcept {
-    secureClear(player1.keyPair.sk);
-    secureClear(player2.keyPair.sk);
+    secureClear<mpz_class>(player1.keyPair.sk);
+    secureClear<mpz_class>(player2.keyPair.sk);
 }
 
 void TwoPlayerCardShuffle::initializePlayers(const std::string& player1Name, const std::string& player2Name) {
@@ -105,16 +97,16 @@ Card TwoPlayerCardShuffle::decryptCard(const BayerGroth::KeyPair& keyPair, const
     mpz_class plaintext = BayerGroth::BayerGrothShuffle::modMul(ct.b, m_inv, keyPair.pk.p);
 
     if (plaintext < mpz_class(1) || plaintext > mpz_class(DECK_SIZE)) {
-        secureClearMpz(m);
-        secureClearMpz(m_inv);
-        secureClearMpz(plaintext);
+        secureClear<mpz_class>(m);
+        secureClear<mpz_class>(m_inv);
+        secureClear<mpz_class>(plaintext);
         throw std::runtime_error("Decrypted value out of valid card range: " + plaintext.get_str());
     }
 
     int value = static_cast<int>(plaintext.get_si()) - 1;
-    secureClearMpz(m);
-    secureClearMpz(m_inv);
-    secureClearMpz(plaintext);
+    secureClear<mpz_class>(m);
+    secureClear<mpz_class>(m_inv);
+    secureClear<mpz_class>(plaintext);
     return Card::fromInt(value);
 }
 
