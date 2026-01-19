@@ -22,8 +22,8 @@ struct KeyPair {
     KeyPair() = default;
     KeyPair(const KeyPair&) = delete;
     KeyPair& operator=(const KeyPair&) = delete;
-    KeyPair(KeyPair&&) = default;
-    KeyPair& operator=(KeyPair&&) = default;
+    KeyPair(KeyPair&&) noexcept = default;
+    KeyPair& operator=(KeyPair&&) noexcept = default;
 };
 
 struct Ciphertext {
@@ -53,8 +53,8 @@ struct ShuffleProof {
     ShuffleProof() = default;
     ShuffleProof(const ShuffleProof&) = default;
     ShuffleProof& operator=(const ShuffleProof&) = default;
-    ShuffleProof(ShuffleProof&&) = default;
-    ShuffleProof& operator=(ShuffleProof&&) = default;
+    ShuffleProof(ShuffleProof&&) noexcept = default;
+    ShuffleProof& operator=(ShuffleProof&&) noexcept = default;
 };
 
 class BayerGrothShuffle {
@@ -64,17 +64,17 @@ public:
 
     void setRandomGenerator(std::mt19937_64 rng) noexcept;
 
-    [[nodiscard]] KeyPair generateKeyPair();
-    [[nodiscard]] Ciphertext encrypt(const PublicKey& pk, const mpz_class& message);
-    [[nodiscard]] Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r);
-    [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) const;
+    [[nodiscard]] KeyPair generateKeyPair() noexcept(false);
+    [[nodiscard]] Ciphertext encrypt(const PublicKey& pk, const mpz_class& message) noexcept(false);
+    [[nodiscard]] Ciphertext reEncrypt(const PublicKey& pk, const Ciphertext& ct, const mpz_class& r) noexcept(false);
+    [[nodiscard]] mpz_class decrypt(const PublicKey& pk, const mpz_class& sk, const Ciphertext& ct) const noexcept(false);
 
     [[nodiscard]] std::vector<Ciphertext> shuffle(
         const PublicKey& pk,
         const std::vector<Ciphertext>& input,
         const std::vector<mpz_class>& randomness,
         const std::vector<size_t>& permutation,
-        ShuffleProof& proof);
+        ShuffleProof& proof) noexcept(false);
 
     [[nodiscard]] bool verify(
         const PublicKey& pk,
@@ -95,7 +95,7 @@ public:
     [[nodiscard]] static mpz_class modMul(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept;
     [[nodiscard]] static mpz_class modDiv(const mpz_class& a, const mpz_class& b, const mpz_class& mod) noexcept(false);
 
-    [[nodiscard]] static mpz_class getSecureRandom(const mpz_class& limit);
+    [[nodiscard]] static mpz_class getSecureRandom(const mpz_class& limit) noexcept(false);
     [[nodiscard]] mpz_class generateRandomNumber(const mpz_class& limit) noexcept;
     [[nodiscard]] static std::vector<size_t> generatePermutation(size_t n, std::mt19937_64& rng) noexcept;
 
