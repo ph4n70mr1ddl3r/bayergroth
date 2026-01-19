@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstddef>
 #include <numeric>
+#include <limits>
 
 namespace BayerGroth {
 
@@ -20,8 +21,7 @@ static constexpr size_t MIN_SECURE_BYTES = 32;
 
 static void secureClearMpz(mpz_class& val) noexcept {
     if (val != ZERO) {
-        mpz_class zero(0);
-        mpz_set(val.get_mpz_t(), zero.get_mpz_t());
+        mpz_set_ui(val.get_mpz_t(), 0);
     }
 }
 
@@ -62,6 +62,20 @@ struct GmpRandState {
     }
     GmpRandState(const GmpRandState&) = delete;
     GmpRandState& operator=(const GmpRandState&) = delete;
+};
+
+struct SMatrixCleanup {
+    std::vector<std::vector<mpz_class>>& matrix;
+    ~SMatrixCleanup() {
+        if (!matrix.empty()) {
+            for (auto& row : matrix) {
+                for (auto& val : row) {
+                    secureClearMpz(val);
+                }
+            }
+            matrix.clear();
+        }
+    }
 };
 
 } // anonymous namespace
@@ -195,6 +209,12 @@ mpz_class BayerGrothShuffle::getRandomExponent() {
 }
 
 std::vector<size_t> BayerGrothShuffle::generatePermutation(size_t n, std::mt19937_64& rng) noexcept {
+    if (n == 0) {
+        return {};
+    }
+    if (n > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        return {};
+    }
     std::vector<size_t> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
     std::shuffle(perm.begin(), perm.end(), rng);
@@ -618,6 +638,7 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
     }
 
     generateCommitments(pk, permutation, proof);
+    SMatrixCleanup cleanup{S_matrix};
     mpz_class challenge = computeChallenge(pk, input, output, proof);
 
     mpz_class sum_output_rand = ZERO;
@@ -640,13 +661,6 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
 
     proof.t = modExp(pk.g, expected_sum_z1, pk.p);
     proof.u = modExp(pk.h, expected_sum_z1, pk.p);
-
-    for (auto& row : S_matrix) {
-        for (auto& val : row) {
-            secureClearMpz(val);
-        }
-    }
-    S_matrix.clear();
 
     return output;
 }
