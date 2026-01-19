@@ -18,6 +18,9 @@ static const mpz_class TWO(2);
 static constexpr int PRIME_ITERATIONS = 100;
 static constexpr size_t MAX_RANDOM_RETRY = 100;
 static constexpr size_t MIN_SECURE_BYTES = 32;
+static constexpr size_t MIN_HASH_LEN = 32;
+static constexpr size_t MAX_SHUFFLE_SIZE = 1000;
+static const char* PROTOCOL_ID = "BayerGroth2012-Shuffle-v1";
 
 static void secureClearMpz(mpz_class& val) noexcept {
     if (val != ZERO) {
@@ -451,8 +454,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     unsigned char domain_sep = 0x01;
     EVP_DigestUpdate(evpCtx.get(), &domain_sep, sizeof(domain_sep));
 
-    const char* protocol_id = "BayerGroth2012-Shuffle-v1";
-    EVP_DigestUpdate(evpCtx.get(), protocol_id, std::strlen(protocol_id));
+    EVP_DigestUpdate(evpCtx.get(), PROTOCOL_ID, std::strlen(PROTOCOL_ID));
 
     size_t n = proof.A.size();
     digestSizeT(evpCtx.get(), n);
@@ -497,6 +499,10 @@ mpz_class BayerGrothShuffle::computeChallenge(
     }
 
     EVP_DigestFinal_ex(evpCtx.get(), hash, &hash_len);
+
+    if (hash_len < MIN_HASH_LEN) {
+        throw std::runtime_error("Hash output too short for secure challenge");
+    }
 
     mpz_class challenge = ZERO;
     for (unsigned int i = 0; i < hash_len; ++i) {
@@ -602,6 +608,9 @@ std::vector<Ciphertext> BayerGrothShuffle::shuffle(
 
     if (n == 0) {
         throw std::invalid_argument("Input array cannot be empty");
+    }
+    if (n > MAX_SHUFFLE_SIZE) {
+        throw std::invalid_argument("Shuffle size exceeds maximum allowed (" + std::to_string(MAX_SHUFFLE_SIZE) + ")");
     }
     if (randomness.size() != n) {
         throw std::invalid_argument("Randomness size must match input size");

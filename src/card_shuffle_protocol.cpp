@@ -311,6 +311,7 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
 
     mpz_class plaintext = ct.b * m_inv % player1.keyPair.pk.p;
     int value = static_cast<int>(plaintext.get_si()) - 1;
+    secureClear<mpz_class>(plaintext);
 
     if (value < 0 || value > 51) {
         std::cout << "Error: Invalid card value (" << value << ")!" << std::endl;
