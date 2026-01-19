@@ -128,6 +128,18 @@ int main() {
 
     std::cout << "Bob shuffled the deck" << std::endl;
 
+    std::cout << "\n=== Verifying Shuffle Proofs ===" << std::endl;
+    bool proof1Valid = shuffle.verify(aliceKey.pk, aliceInputDeck, aliceOutputDeck, proof1);
+    std::cout << "Alice's shuffle proof: " << (proof1Valid ? "VALID" : "INVALID") << std::endl;
+
+    bool proof2Valid = shuffle.verify(bobKey.pk, bobInputDeck, bobOutputDeck, proof2);
+    std::cout << "Bob's shuffle proof: " << (proof2Valid ? "VALID" : "INVALID") << std::endl;
+
+    if (!proof1Valid || !proof2Valid) {
+        std::cerr << "Error: Shuffle proof verification failed" << std::endl;
+        return 1;
+    }
+
     std::cout << "\n*** Both shuffles complete ***" << std::endl;
     std::cout << "*** Neither player knows the card order ***" << std::endl;
     std::cout << "*** Cards must be cooperatively revealed ***" << std::endl;

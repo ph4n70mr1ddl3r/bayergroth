@@ -117,9 +117,12 @@ void BayerGrothShuffle::setRandomGenerator(std::mt19937_64 rng_) noexcept {
 
 void BayerGrothShuffle::hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value) noexcept {
     size_t size = (mpz_sizeinbase(value.get_mpz_t(), 2) + 7) / 8;
-    std::vector<unsigned char> bytes(size);
-    mpz_export(bytes.data(), nullptr, 1, 1, 0, 0, value.get_mpz_t());
-    EVP_DigestUpdate(ctx, bytes.data(), bytes.size());
+    try {
+        std::vector<unsigned char> bytes(size);
+        mpz_export(bytes.data(), nullptr, 1, 1, 0, 0, value.get_mpz_t());
+        EVP_DigestUpdate(ctx, bytes.data(), bytes.size());
+    } catch (...) {
+    }
 }
 
 bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) noexcept {
@@ -303,8 +306,6 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         if (g_power != ONE) {
-            secureClearMpz(g_candidate);
-            secureClearMpz(g_power);
             throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
         }
     }
@@ -850,7 +851,7 @@ bool BayerGrothShuffle::verify(
 }
 
 mpz_class BayerGrothShuffle::modExp(const mpz_class& base, const mpz_class& exp, const mpz_class& mod) noexcept {
-    if (exp < ZERO) {
+    if (exp < ZERO || base < ZERO || mod <= ZERO) {
         return mpz_class(0);
     }
     mpz_class result;
