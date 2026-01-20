@@ -23,9 +23,15 @@ static const char* PROTOCOL_ID = "BayerGroth2012-Shuffle-v1";
 
 static void secureClearMpz(mpz_class& val) noexcept {
     mpz_ptr mpz = val.get_mpz_t();
-    if (mpz_cmp_ui(mpz, 0) != 0) {
-        mpz_set_ui(mpz, 0);
+    size_t size = mpz_size(mpz);
+    if (size > 0 && mpz_cmp_ui(mpz, 0) != 0) {
+        mp_limb_t* limbs = mpz_limbs_write(mpz, size);
+        if (limbs) {
+            OPENSSL_cleanse(limbs, size * sizeof(mp_limb_t));
+            mpz_limbs_finish(mpz, size);
+        }
     }
+    mpz_set_ui(mpz, 0);
 }
 
 static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
@@ -119,6 +125,8 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
     secureClearMpz(currentPk.h);
     secureClearMpz(currentPk.q);
     secureClearMpz(currentPk.p);
+    std::vector<unsigned char> rng_state(sizeof(std::mt19937_64));
+    OPENSSL_cleanse(rng_state.data(), rng_state.size());
     rng = std::mt19937_64();
 }
 
@@ -165,19 +173,32 @@ bool BayerGrothShuffle::isValidPublicKey(const PublicKey& pk) noexcept {
     mpz_sub_ui(p_minus_one.get_mpz_t(), pk.p.get_mpz_t(), 1);
     mpz_class p_minus_one_div_q;
     mpz_tdiv_q(p_minus_one_div_q.get_mpz_t(), p_minus_one.get_mpz_t(), pk.q.get_mpz_t());
-    if (mpz_cmp_ui(p_minus_one_div_q.get_mpz_t(), 2) != 0) return false;
-    secureClearMpz(p_minus_one);
+    if (mpz_cmp_ui(p_minus_one_div_q.get_mpz_t(), 2) != 0) {
+        secureClearMpz(p_minus_one);
+        secureClearMpz(p_minus_one_div_q);
+        return false;
+    }
     secureClearMpz(p_minus_one_div_q);
 
     mpz_class g_q;
     mpz_powm(g_q.get_mpz_t(), pk.g.get_mpz_t(), pk.q.get_mpz_t(), pk.p.get_mpz_t());
-    if (g_q != ONE) return false;
+    if (g_q != ONE) {
+        secureClearMpz(p_minus_one);
+        secureClearMpz(g_q);
+        return false;
+    }
     secureClearMpz(g_q);
 
     mpz_class h_q;
     mpz_powm(h_q.get_mpz_t(), pk.h.get_mpz_t(), pk.q.get_mpz_t(), pk.p.get_mpz_t());
-    if (h_q != ONE) return false;
+    if (h_q != ONE) {
+        secureClearMpz(p_minus_one);
+        secureClearMpz(h_q);
+        return false;
+    }
     secureClearMpz(h_q);
+
+    secureClearMpz(p_minus_one);
 
     if (!isSafePrime(pk.p, pk.q)) return false;
 
@@ -531,7 +552,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
 
     EVP_DigestFinal_ex(evpCtx.get(), hash, &hash_len);
 
-    static constexpr unsigned int TRUNCATED_HASH_LEN = 32;
+    static constexpr unsigned int TRUNCATED_HASH_LEN = 64;
     if (hash_len < TRUNCATED_HASH_LEN) {
         throw std::runtime_error("Hash output too short for secure challenge");
     }

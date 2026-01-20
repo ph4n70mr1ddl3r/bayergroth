@@ -24,16 +24,15 @@ void secureClear(T& obj) noexcept {
 template<>
 inline void secureClear<mpz_class>(mpz_class& obj) noexcept {
     mpz_ptr mpz = obj.get_mpz_t();
-    if (mpz) {
-        mpz_class temp;
-        mpz_set(temp.get_mpz_t(), mpz);
-        mp_limb_t* limbs = mpz_limbs_write(mpz, mpz_size(mpz));
+    size_t size = mpz_size(mpz);
+    if (size > 0 && mpz != 0) {
+        mp_limb_t* limbs = mpz_limbs_write(mpz, size);
         if (limbs) {
-            OPENSSL_cleanse(limbs, mpz_size(mpz) * sizeof(mp_limb_t));
-            mpz_limbs_finish(mpz, 0);
+            OPENSSL_cleanse(limbs, size * sizeof(mp_limb_t));
+            mpz_limbs_finish(mpz, size);
         }
-        mpz_set_ui(mpz, 0);
     }
+    mpz_set_ui(mpz, 0);
 }
 
 inline void secureClearCiphertext(BayerGroth::Ciphertext& ct) noexcept {
