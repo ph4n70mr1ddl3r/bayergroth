@@ -24,7 +24,7 @@ struct Card {
 struct Player {
     std::string name;
     BayerGroth::KeyPair keyPair;
-    std::mt19937_64 rng;
+    std::mt19937_64 rng{};
 };
 
 struct ShuffleRound {

@@ -10,10 +10,6 @@
 
 namespace CardShuffle {
 
-namespace {
-
-} // anonymous namespace
-
 std::string Card::toString() const noexcept {
     static const char* const ranks[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
     static const char* const suits[] = {"♥", "♦", "♣", "♠"};
@@ -368,7 +364,6 @@ void TwoPlayerCardShuffle::printDeckState() {
 
 bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof) {
     shuffler.setRandomGenerator(player1.rng);
-    shuffler.setRandomGenerator(player2.rng);
     return shuffler.verify(pk, input, output, proof);
 }
 

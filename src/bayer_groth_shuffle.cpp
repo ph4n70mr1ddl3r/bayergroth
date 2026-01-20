@@ -19,7 +19,7 @@ static constexpr int PRIME_ITERATIONS = 100;
 static constexpr size_t MAX_RANDOM_RETRY = 100;
 static constexpr size_t MIN_SECURE_BYTES = 32;
 static constexpr size_t MAX_SHUFFLE_SIZE = 1000;
-static const char* PROTOCOL_ID = "BayerGroth2012-Shuffle-v1";
+static constexpr char PROTOCOL_ID[] = "BayerGroth2012-Shuffle-v1";
 
 static void secureClearMpz(mpz_class& val) noexcept {
     mpz_ptr mpz = val.get_mpz_t();
