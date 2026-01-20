@@ -25,7 +25,7 @@ template<>
 inline void secureClear<mpz_class>(mpz_class& obj) noexcept {
     mpz_ptr mpz = obj.get_mpz_t();
     size_t size = mpz_size(mpz);
-    if (size > 0 && mpz != 0) {
+    if (size > 0 && mpz_cmp_ui(mpz, 0) != 0) {
         mp_limb_t* limbs = mpz_limbs_write(mpz, size);
         if (limbs) {
             OPENSSL_cleanse(limbs, size * sizeof(mp_limb_t));

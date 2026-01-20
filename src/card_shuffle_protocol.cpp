@@ -368,6 +368,7 @@ void TwoPlayerCardShuffle::printDeckState() {
 
 bool TwoPlayerCardShuffle::verifyShuffle(const BayerGroth::PublicKey& pk, const std::vector<BayerGroth::Ciphertext>& input, const std::vector<BayerGroth::Ciphertext>& output, const BayerGroth::ShuffleProof& proof) {
     shuffler.setRandomGenerator(player1.rng);
+    shuffler.setRandomGenerator(player2.rng);
     return shuffler.verify(pk, input, output, proof);
 }
 
@@ -378,8 +379,8 @@ bool TwoPlayerCardShuffle::verifyKeyCompatibility(const BayerGroth::KeyPair& key
     bool p_match = shuffler.constantTimeEquals(pk1.p, pk2.p);
     bool q_match = shuffler.constantTimeEquals(pk1.q, pk2.q);
 
-    bool g1_in_range = pk1.g > mpz_class(1) && pk1.g < pk1.p;
-    bool g2_in_range = pk2.g > mpz_class(1) && pk2.g < pk2.p;
+    bool g1_in_range = shuffler.constantTimeEquals(pk1.g, pk1.g) && pk1.g > mpz_class(1) && pk1.g < pk1.p;
+    bool g2_in_range = shuffler.constantTimeEquals(pk2.g, pk2.g) && pk2.g > mpz_class(1) && pk2.g < pk2.p;
 
     mpz_class g1_q, g2_q;
     mpz_powm(g1_q.get_mpz_t(), pk1.g.get_mpz_t(), pk1.q.get_mpz_t(), pk1.p.get_mpz_t());

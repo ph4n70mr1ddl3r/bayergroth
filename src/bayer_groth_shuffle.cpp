@@ -120,13 +120,10 @@ BayerGrothShuffle::~BayerGrothShuffle() noexcept {
         }
     }
     S_matrix.clear();
-    S_matrix.shrink_to_fit();
     secureClearMpz(currentPk.g);
     secureClearMpz(currentPk.h);
     secureClearMpz(currentPk.q);
     secureClearMpz(currentPk.p);
-    std::vector<unsigned char> rng_state(sizeof(std::mt19937_64));
-    OPENSSL_cleanse(rng_state.data(), rng_state.size());
     rng = std::mt19937_64();
 }
 
