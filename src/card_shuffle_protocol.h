@@ -53,7 +53,7 @@ public:
     bool player1Verify();
     bool cooperativeReveal(int position, Card& card);
     void revealAllCards();
-    void printDeckState();
+    void printDeckState() const;
 
 private:
     BayerGroth::BayerGrothShuffle shuffler;

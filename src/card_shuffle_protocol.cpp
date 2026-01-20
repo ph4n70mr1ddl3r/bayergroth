@@ -357,7 +357,7 @@ void TwoPlayerCardShuffle::revealAllCards() {
     }
 }
 
-void TwoPlayerCardShuffle::printDeckState() {
+void TwoPlayerCardShuffle::printDeckState() const {
     std::cout << "\n=== Current Deck State ===" << std::endl;
     std::cout << "Number of encrypted cards: " << deckState.encryptedCards.size() << std::endl;
     std::cout << "Number of shuffle rounds: " << deckState.shuffleHistory.size() << std::endl;

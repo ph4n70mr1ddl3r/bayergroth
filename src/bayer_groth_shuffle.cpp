@@ -38,7 +38,8 @@ static void digestSizeT(EVP_MD_CTX* ctx, size_t value) noexcept {
     unsigned char bytes[sizeof(size_t)];
     constexpr size_t byte_count = sizeof(size_t);
     for (size_t i = 0; i < byte_count; ++i) {
-        bytes[byte_count - 1 - i] = static_cast<unsigned char>((value >> (i * 8)) & 0xFF);
+        size_t shift = i * 8;
+        bytes[byte_count - 1 - i] = static_cast<unsigned char>((value >> shift) & 0xFF);
     }
     EVP_DigestUpdate(ctx, bytes, byte_count);
 }
