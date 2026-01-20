@@ -144,6 +144,7 @@ void BayerGrothShuffle::hashMpzToDigest(EVP_MD_CTX* ctx, const mpz_class& value)
     if (exported > 0) {
         EVP_DigestUpdate(ctx, bytes.data(), exported);
     }
+    OPENSSL_cleanse(bytes.data(), size);
 }
 
 bool BayerGrothShuffle::isSafePrime(const mpz_class& p, const mpz_class& q) noexcept {
@@ -345,12 +346,15 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         if (g_power != ONE) {
+            secureClearMpz(g_candidate);
+            secureClearMpz(g_power);
             throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
         }
         found_generator = true;
     }
 
     keyPair.pk.g = g_candidate;
+    secureClearMpz(g_candidate);
     secureClearMpz(g_power);
 
     mpz_urandomb(keyPair.sk.get_mpz_t(), randState.state, q_bits);
@@ -436,6 +440,9 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
 
     size_t len_diff = a_exported ^ b_exported;
     result |= static_cast<unsigned char>(len_diff);
+
+    OPENSSL_cleanse(a_padded.data(), max_bytes);
+    OPENSSL_cleanse(b_padded.data(), max_bytes);
 
     return result == 0;
 }
@@ -555,6 +562,8 @@ mpz_class BayerGrothShuffle::computeChallenge(
     for (unsigned int i = 0; i < TRUNCATED_HASH_LEN; ++i) {
         challenge = challenge * 256 + hash[i];
     }
+
+    OPENSSL_cleanse(hash, TRUNCATED_HASH_LEN);
 
     return challenge % pk.q;
 }
