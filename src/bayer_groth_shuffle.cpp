@@ -18,7 +18,6 @@ static const mpz_class TWO(2);
 static constexpr int PRIME_ITERATIONS = 100;
 static constexpr size_t MAX_RANDOM_RETRY = 100;
 static constexpr size_t MIN_SECURE_BYTES = 32;
-static constexpr size_t MIN_HASH_LEN = 32;
 static constexpr size_t MAX_SHUFFLE_SIZE = 1000;
 static const char* PROTOCOL_ID = "BayerGroth2012-Shuffle-v1";
 
@@ -79,6 +78,18 @@ struct SMatrixCleanup {
             }
             matrix.clear();
         }
+    }
+};
+
+struct SeedCleanup {
+    std::vector<unsigned char>& seed_bytes;
+    mpz_class& seed_mpz;
+    ~SeedCleanup() {
+        if (!seed_bytes.empty()) {
+            secureClearBytes(seed_bytes.data(), seed_bytes.size());
+            seed_bytes.clear();
+        }
+        secureClearMpz(seed_mpz);
     }
 };
 
@@ -251,12 +262,12 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
     getRandomBytesFromDevice(seed_bytes.data(), 64);
 
     mpz_class seed_mpz = ZERO;
+    SeedCleanup cleanup{seed_bytes, seed_mpz};
+
     for (size_t i = 0; i < 64; ++i) {
         seed_mpz = seed_mpz * 256 + seed_bytes[i];
     }
     gmp_randseed(randState.state, seed_mpz.get_mpz_t());
-    secureClearBytes(seed_bytes.data(), 64);
-    secureClearMpz(seed_mpz);
 
     size_t p_bits = securityParam;
     size_t q_bits = p_bits - 1;
@@ -400,14 +411,16 @@ bool BayerGrothShuffle::constantTimeEquals(const mpz_class& a, const mpz_class& 
     mpz_export(a_padded.data(), &a_exported, 1, 1, 0, 0, a.get_mpz_t());
     mpz_export(b_padded.data(), &b_exported, 1, 1, 0, 0, b.get_mpz_t());
 
-    size_t size_diff = a_bytes ^ b_bytes;
-    unsigned char result = static_cast<unsigned char>(size_diff);
+    unsigned char result = 0;
 
     for (size_t i = 0; i < max_bytes; ++i) {
-        unsigned char a_byte = i < a_exported ? a_padded[i] : 0;
-        unsigned char b_byte = i < b_exported ? b_padded[i] : 0;
+        unsigned char a_byte = a_padded[i];
+        unsigned char b_byte = b_padded[i];
         result |= static_cast<unsigned char>(a_byte ^ b_byte);
     }
+
+    size_t len_diff = a_exported ^ b_exported;
+    result |= static_cast<unsigned char>(len_diff);
 
     return result == 0;
 }
@@ -465,7 +478,7 @@ mpz_class BayerGrothShuffle::computeChallenge(
     unsigned int hash_len;
 
     EvpMdCtx evpCtx;
-    if (EVP_DigestInit_ex(evpCtx.get(), EVP_sha256(), nullptr) != 1) {
+    if (EVP_DigestInit_ex(evpCtx.get(), EVP_sha512(), nullptr) != 1) {
         throw std::runtime_error("Failed to initialize EVP digest context");
     }
 
@@ -518,12 +531,13 @@ mpz_class BayerGrothShuffle::computeChallenge(
 
     EVP_DigestFinal_ex(evpCtx.get(), hash, &hash_len);
 
-    if (hash_len < MIN_HASH_LEN) {
+    static constexpr unsigned int TRUNCATED_HASH_LEN = 32;
+    if (hash_len < TRUNCATED_HASH_LEN) {
         throw std::runtime_error("Hash output too short for secure challenge");
     }
 
     mpz_class challenge = ZERO;
-    for (unsigned int i = 0; i < hash_len; ++i) {
+    for (unsigned int i = 0; i < TRUNCATED_HASH_LEN; ++i) {
         challenge = challenge * 256 + hash[i];
     }
 
@@ -880,6 +894,9 @@ mpz_class BayerGrothShuffle::modExp(const mpz_class& base, const mpz_class& exp,
 }
 
 mpz_class BayerGrothShuffle::modInv(const mpz_class& a, const mpz_class& mod) noexcept(false) {
+    if (a == ZERO) {
+        throw std::invalid_argument("Cannot compute modular inverse of zero");
+    }
     mpz_class result;
     if (mpz_invert(result.get_mpz_t(), a.get_mpz_t(), mod.get_mpz_t()) == 0) {
         throw std::runtime_error("Modular inverse does not exist");
