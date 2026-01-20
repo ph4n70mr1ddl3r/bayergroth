@@ -332,6 +332,7 @@ bool TwoPlayerCardShuffle::cooperativeReveal(int position, Card& card) {
 
     secureClear<mpz_class>(share1);
     secureClear<mpz_class>(share2);
+    secureClear<mpz_class>(combined_share);
 
     return true;
 }

@@ -348,15 +348,12 @@ KeyPair BayerGrothShuffle::generateKeyPair() {
         mpz_powm(g_power.get_mpz_t(), g_candidate.get_mpz_t(),
                  keyPair.pk.q.get_mpz_t(), keyPair.pk.p.get_mpz_t());
         if (g_power != ONE) {
-            secureClearMpz(g_candidate);
-            secureClearMpz(g_power);
             throw std::runtime_error("Failed to find valid generator g (2 is not a generator)");
         }
         found_generator = true;
     }
 
     keyPair.pk.g = g_candidate;
-    secureClearMpz(g_candidate);
     secureClearMpz(g_power);
 
     mpz_urandomb(keyPair.sk.get_mpz_t(), randState.state, q_bits);
